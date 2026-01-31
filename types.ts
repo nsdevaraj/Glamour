@@ -1,0 +1,48 @@
+export interface MakeupConfig {
+  enableLips: boolean;
+  lipColor: string;
+  lipOpacity: number;
+  enableTeeth: boolean;
+  teethWhiteness: number;
+  
+  enableFace: boolean;
+  blushColor: string;
+  blushOpacity: number;
+  foundationTone: string;
+  foundationOpacity: number;
+
+  enableEyes: boolean;
+  eyeshadowColor: string;
+  eyeshadowOpacity: number;
+  eyelinerColor: string;
+  eyelinerOpacity: number;
+
+  enableHair: boolean;
+  hairColor: string;
+  hairOpacity: number;
+
+  enableAccessories: boolean;
+  accessoryColor: string; // For Bindi
+}
+
+export interface AIAdvice {
+  title: string;
+  description: string;
+  suggestedConfig: Partial<MakeupConfig>;
+}
+
+export enum MakeupCategory {
+  LIPS = 'LIPS',
+  EYES = 'EYES',
+  FACE = 'FACE',
+  HAIR = 'HAIR',
+  ACCESSORIES = 'EXTRAS'
+}
+
+// Global types for MediaPipe libraries loaded via script tags
+declare global {
+  interface Window {
+    FaceMesh: any;
+    Camera: any;
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "GlamourAI - Digital Makeover",
+  "description": "A real-time digital makeover application using facial landmark detection for virtual makeup and Gemini AI for personalized beauty advice.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

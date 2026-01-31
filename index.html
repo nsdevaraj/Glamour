@@ -1,70 +1,45 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Built with AI Studio</title>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GlamourAI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- MediaPipe Dependencies loaded via CDN for portability -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #ffffff;
-        }
-        .container {
-            text-align: center;
-            max-width: 800px;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-        }
-        img {
-            max-width: 100%;
-            height: auto;
-            margin-bottom: 20px;
-            border-radius: 8px;
-        }
-        h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            color: #333;
-        }
-        p {
-            font-size: 1.2rem;
-            color: #666;
-            margin-bottom: 20px;
-        }
-        a {
-            display: inline-block;
-            background-color: #007bff;
-            color: white;
-            padding: 10px 20px;
-            text-decoration: none;
-            border-radius: 5px;
-            font-weight: bold;
-            transition: background-color 0.3s;
-        }
-        a:hover {
-            background-color: #0056b3;
-        }
+      /* Custom scrollbar for webkit */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #1f2937; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #4b5563; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #6b7280; 
+      }
     </style>
+  <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react-webcam": "https://esm.sh/react-webcam@^7.2.0"
+  }
+}
+</script>
 </head>
-<body>
-    <div class="container">
-        <!-- Bolt Optimization: Added width/height to prevent CLS and fetchpriority for LCP -->
-        <img src="banner.webp" alt="GHBanner" width="1200" height="475" fetchpriority="high" />
-        <h1>Built with AI Studio</h1>
-        <p>The fastest path from prompt to production with Gemini.</p>
-        <a href="https://aistudio.google.com/apps">Start building</a>
-    </div>
-    <script src="app.js" defer></script>
-</body>
+  <body class="bg-gray-900 text-white overflow-hidden">
+    <div id="root"></div>
+  </body>
 </html>
