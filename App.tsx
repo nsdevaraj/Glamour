@@ -22,15 +22,13 @@ const App: React.FC = () => {
         <MakeoverCanvas config={makeupConfig} />
       </div>
 
-      {/* Floating UI Overlay */}
-      <div className="absolute inset-y-0 left-0 z-10 pointer-events-none">
-         <ControlPanel 
-            config={makeupConfig} 
-            updateConfig={handleConfigUpdate}
-            activeCategory={activeCategory}
-            setActiveCategory={setActiveCategory}
-          />
-      </div>
+      {/* UI Overlay */}
+      <ControlPanel
+        config={makeupConfig}
+        updateConfig={handleConfigUpdate}
+        activeCategory={activeCategory}
+        setActiveCategory={setActiveCategory}
+      />
     </div>
   );
 };
