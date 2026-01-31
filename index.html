@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Built with AI Studio</title>
     <style>
+        :root {
+            --bg-color: #fafafa;
+            --text-color: #333333;
+            --accent-color: #000000;
+            --accent-hover: #333333;
+            --font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
         body, html {
             margin: 0;
             padding: 0;
@@ -13,47 +21,70 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #ffffff;
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            -webkit-font-smoothing: antialiased;
         }
+
         .container {
             text-align: center;
-            max-width: 800px;
-            padding: 20px;
+            max-width: 600px;
+            padding: 40px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100%;
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
         }
+
         img {
             max-width: 100%;
             height: auto;
-            margin-bottom: 20px;
-            border-radius: 8px;
+            margin-bottom: 32px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
+
         h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            color: #333;
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0 0 12px 0;
+            color: var(--text-color);
+            letter-spacing: -0.5px;
         }
+
         p {
-            font-size: 1.2rem;
+            font-size: 1.125rem;
             color: #666;
-            margin-bottom: 20px;
+            margin: 0 0 32px 0;
+            line-height: 1.5;
         }
+
         a {
-            display: inline-block;
-            background-color: #007bff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--accent-color);
             color: white;
-            padding: 10px 20px;
+            padding: 12px 32px;
             text-decoration: none;
-            border-radius: 5px;
-            font-weight: bold;
-            transition: background-color 0.3s;
+            border-radius: 9999px;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.2s ease;
         }
+
         a:hover {
-            background-color: #0056b3;
+            background-color: var(--accent-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        a:active {
+            transform: translateY(0);
         }
     </style>
 </head>

@@ -1,7 +1,14 @@
-console.log("App.ts is running!");
+// app.ts
 document.addEventListener('DOMContentLoaded', () => {
-    const header = document.createElement('h2');
-    header.innerText = "Hello from app.ts";
-    header.style.color = "blue";
-    document.querySelector('.container')?.appendChild(header);
+    const container = document.querySelector('.container') as HTMLElement;
+    if (container) {
+        container.style.opacity = '0';
+        container.style.transition = 'opacity 1s ease-in-out';
+
+        // Trigger reflow
+        void container.offsetWidth;
+
+        container.style.opacity = '1';
+    }
+    console.log("App.ts loaded: Fade-in animation applied.");
 });
