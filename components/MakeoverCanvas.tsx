@@ -562,10 +562,12 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
       <div className="absolute top-4 right-4 z-50">
         <button
             onClick={() => setIsCompareMode(!isCompareMode)}
-            className={`px-4 py-2 rounded-full text-sm font-bold tracking-wide transition-all backdrop-blur-md border border-white/20
-              ${isCompareMode ? 'bg-pink-500/80 text-white shadow-[0_0_15px_rgba(236,72,153,0.5)]' : 'bg-black/30 text-white/80 hover:bg-black/50'}`}
+            className={`px-6 py-2.5 rounded-full text-[10px] font-bold tracking-[0.2em] transition-all duration-300 backdrop-blur-xl border
+              ${isCompareMode
+                ? 'bg-pink-500 text-white border-pink-400 shadow-[0_0_20px_rgba(236,72,153,0.4)] scale-105'
+                : 'bg-black/20 text-white/60 border-white/10 hover:bg-white/10 hover:text-white hover:border-white/30'}`}
         >
-            {isCompareMode ? 'COMPARE ON' : 'COMPARE'}
+            COMPARE
         </button>
       </div>
 
