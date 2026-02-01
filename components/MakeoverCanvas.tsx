@@ -195,29 +195,37 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
     if (!center) return;
 
     // Filter points from face oval that are roughly the hairline (above nose)
-    // Note: This relies on FACEMESH_FACE_OVAL being a perimeter.
-    const ovalIndices = FACEMESH_FACE_OVAL;
-    const hairlinePoints = [];
+    // New Logic: Use topology to extract the exact hairline from ear to ear.
+    // FACEMESH_FACE_OVAL is ordered: 10 (Top), ... 454 (Left Ear), ... 152 (Chin), ... 234 (Right Ear), ... 109.
 
-    for(const idx of ovalIndices) {
-        const p = landmarks[idx];
-        // Simple heuristic: Points higher than the nose (y is smaller)
-        if (p.y < center.y) {
-            hairlinePoints.push(p);
-        }
-    }
+    // Segment 1: Right Ear (234) -> Top (109). Indices 28..35
+    const rightSideIndices = FACEMESH_FACE_OVAL.slice(28); // 234...109
+    // Segment 2: Top (10) -> Left Ear (454). Indices 0..8
+    const leftSideIndices = FACEMESH_FACE_OVAL.slice(0, 9); // 10...454
+
+    // Combine to get continuous line: Right Ear -> Top -> Left Ear
+    const hairlineIndices = [...rightSideIndices, ...leftSideIndices];
+    const hairlinePoints = hairlineIndices.map(idx => landmarks[idx]);
 
     if (hairlinePoints.length < 5) return;
 
-    // Sort by X to ensure clean polygon construction
-    hairlinePoints.sort((a, b) => a.x - b.x);
-
-    // Create outer arc by expanding points from center
-    const outerPoints = hairlinePoints.map(p => {
+    // Create outer arc by expanding points from center with variable extrusion
+    const outerPoints = hairlinePoints.map((p, i) => {
         const dx = p.x - center.x;
         const dy = p.y - center.y;
-        // Extrusion factor controls "hair volume" simulation
-        const scale = 2.0; 
+
+        // Calculate factor based on position in array.
+        // Normalize index to 0..1 (0=Right Ear, 0.5=Top, 1=Left Ear)
+        const t = i / (hairlinePoints.length - 1);
+
+        // Parabolic curve for extrusion: Max at 0.5, Min at 0 and 1.
+        // Formula: 4 * t * (1 - t) gives 0 at ends, 1 at center.
+        const curve = 4 * t * (1 - t);
+
+        // Base scale (sides) + Extra scale (top)
+        // Sides: 1.3, Top: 1.3 + 1.5 = 2.8
+        const scale = 1.3 + (1.5 * curve);
+
         return { 
             x: center.x + dx * scale, 
             y: center.y + dy * scale 
@@ -230,13 +238,14 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
     // 'color' blends hue/saturation while keeping luma (good for hair dye)
     // fallback to 'overlay' if strict color mode isn't desired
     ctx.globalCompositeOperation = 'color'; 
-    ctx.filter = 'blur(20px)'; // Heavy blur to blend edges
+    ctx.filter = 'blur(15px)'; // Reduced blur slightly for better definition
 
     ctx.beginPath();
     // Inner curve (Hairline)
     const startP = hairlinePoints[0];
     ctx.moveTo(startP.x * ctx.canvas.width, startP.y * ctx.canvas.height);
-    for (const p of hairlinePoints) {
+    for (let i = 1; i < hairlinePoints.length; i++) {
+        const p = hairlinePoints[i];
         ctx.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
     }
     // Outer curve (Top of head) - reverse order
@@ -249,7 +258,7 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
 
     // Second pass for deeper color
     ctx.globalCompositeOperation = 'soft-light';
-    ctx.globalAlpha = opacity * 0.5;
+    ctx.globalAlpha = opacity * 0.6;
     ctx.fill();
 
     ctx.restore();
