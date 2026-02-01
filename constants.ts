@@ -30,6 +30,9 @@ export const FACEMESH_FACE_OVAL = [
 
 // Special Points for Accessories (Bindi)
 export const LANDMARK_BINDI = 9; // Center of forehead
+export const LANDMARK_NOSE_LEFT = 240; // Left Nostril
+export const LANDMARK_EAR_LEFT = 132; // Left side of face near ear
+export const LANDMARK_EAR_RIGHT = 361; // Right side of face near ear
 
 export const DEFAULT_MAKEUP_CONFIG = {
   enableLips: true,
@@ -55,5 +58,10 @@ export const DEFAULT_MAKEUP_CONFIG = {
   hairOpacity: 0.4,
   
   enableAccessories: false,
-  accessoryColor: '#FFD700'
+  accessoryColor: '#FFD700',
+
+  enableNoseRing: false,
+  noseRingOpacity: 0.8,
+  enableEarrings: false,
+  earringsOpacity: 0.8
 };

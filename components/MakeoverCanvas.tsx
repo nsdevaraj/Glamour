@@ -10,8 +10,12 @@ import {
   FACEMESH_FACE_OVAL,
   FACEMESH_LEFT_EYE_OUTLINE,
   FACEMESH_RIGHT_EYE_OUTLINE,
-  LANDMARK_BINDI
+  LANDMARK_BINDI,
+  LANDMARK_NOSE_LEFT,
+  LANDMARK_EAR_LEFT,
+  LANDMARK_EAR_RIGHT
 } from '../constants';
+import { NOSE_RING_B64, EARRING_B64 } from './assets';
 
 interface MakeoverCanvasProps {
   config: MakeupConfig;
@@ -28,6 +32,10 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
   const [sliderPos, setSliderPos] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Asset refs
+  const noseRingImg = useRef<HTMLImageElement | null>(null);
+  const earringImg = useRef<HTMLImageElement | null>(null);
+
   // Refs for animation loop access
   const configRef = useRef(config);
   const sliderPosRef = useRef(sliderPos);
@@ -42,6 +50,16 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
 
   useEffect(() => {
       isMountedRef.current = true;
+
+      // Load assets
+      const img1 = new Image();
+      img1.src = 'data:image/png;base64,' + NOSE_RING_B64;
+      noseRingImg.current = img1;
+
+      const img2 = new Image();
+      img2.src = 'data:image/png;base64,' + EARRING_B64;
+      earringImg.current = img2;
+
       return () => {
           isMountedRef.current = false;
       };
@@ -369,6 +387,62 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
       ctx.restore();
   }
 
+  const drawNoseRing = (ctx: CanvasRenderingContext2D, landmarks: any[], opacity: number) => {
+    if (opacity <= 0.01 || !noseRingImg.current) return;
+
+    const nosePoint = landmarks[LANDMARK_NOSE_LEFT];
+    // Use face width to scale (distance between cheekbones 234 and 454)
+    const leftFace = landmarks[234];
+    const rightFace = landmarks[454];
+    if (!leftFace || !rightFace || !nosePoint) return;
+
+    const faceWidth = Math.sqrt(Math.pow(rightFace.x - leftFace.x, 2) + Math.pow(rightFace.y - leftFace.y, 2));
+
+    // Scale factor
+    const size = faceWidth * ctx.canvas.width * 0.12;
+    const x = nosePoint.x * ctx.canvas.width - size / 2;
+    const y = nosePoint.y * ctx.canvas.height - size / 2;
+
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    ctx.drawImage(noseRingImg.current, x, y, size, size);
+    ctx.restore();
+  };
+
+  const drawEarrings = (ctx: CanvasRenderingContext2D, landmarks: any[], opacity: number) => {
+    if (opacity <= 0.01 || !earringImg.current) return;
+
+    const leftFace = landmarks[234];
+    const rightFace = landmarks[454];
+    if (!leftFace || !rightFace) return;
+
+    const faceWidth = Math.sqrt(Math.pow(rightFace.x - leftFace.x, 2) + Math.pow(rightFace.y - leftFace.y, 2));
+    const size = faceWidth * ctx.canvas.width * 0.15;
+
+    // Left Ear Area
+    const pLeft = landmarks[LANDMARK_EAR_LEFT];
+    if (pLeft) {
+         // Offset slightly outwards relative to face center
+         const xLeft = pLeft.x * ctx.canvas.width - size/2 - (faceWidth * ctx.canvas.width * 0.05);
+         const yLeft = pLeft.y * ctx.canvas.height;
+         ctx.save();
+         ctx.globalAlpha = opacity;
+         ctx.drawImage(earringImg.current, xLeft, yLeft, size, size);
+         ctx.restore();
+    }
+
+    // Right Ear Area
+    const pRight = landmarks[LANDMARK_EAR_RIGHT];
+    if (pRight) {
+         const xRight = pRight.x * ctx.canvas.width - size/2 + (faceWidth * ctx.canvas.width * 0.05);
+         const yRight = pRight.y * ctx.canvas.height;
+         ctx.save();
+         ctx.globalAlpha = opacity;
+         ctx.drawImage(earringImg.current, xRight, yRight, size, size);
+         ctx.restore();
+    }
+  };
+
   useEffect(() => {
     let faceMesh: any;
     let camera: any;
@@ -458,6 +532,12 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
         // 5. Accessories
         if (currentConfig.enableAccessories) {
           drawBindi(ctx, landmarks, currentConfig.accessoryColor);
+        }
+        if (currentConfig.enableNoseRing) {
+            drawNoseRing(ctx, landmarks, currentConfig.noseRingOpacity);
+        }
+        if (currentConfig.enableEarrings) {
+            drawEarrings(ctx, landmarks, currentConfig.earringsOpacity);
         }
       }
       

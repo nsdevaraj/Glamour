@@ -167,7 +167,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                return (
                    <>
                      <div className="mb-4">
-                        <Toggle label="Accessories" checked={config.enableAccessories} onChange={(v) => updateConfig('enableAccessories', v)} />
+                        <Toggle label="Bindi" checked={config.enableAccessories} onChange={(v) => updateConfig('enableAccessories', v)} />
                      </div>
                      {config.enableAccessories && (
                          <div className="space-y-3">
@@ -195,6 +195,14 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                             </div>
                          </div>
                      )}
+
+                     <div className="mt-4 pt-4 border-t border-white/5 space-y-4">
+                        <Toggle label="Nose Ring" checked={config.enableNoseRing} onChange={(v) => updateConfig('enableNoseRing', v)} />
+                        {config.enableNoseRing && renderSliderControl('Opacity', 'noseRingOpacity')}
+
+                        <Toggle label="Earrings" checked={config.enableEarrings} onChange={(v) => updateConfig('enableEarrings', v)} />
+                        {config.enableEarrings && renderSliderControl('Opacity', 'earringsOpacity')}
+                     </div>
                    </>
                )
           default:
