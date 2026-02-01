@@ -23,6 +23,11 @@ export interface MakeupConfig {
 
   enableAccessories: boolean;
   accessoryColor: string; // For Bindi
+
+  enableNoseRing: boolean;
+  noseRingOpacity: number;
+  enableEarrings: boolean;
+  earringsOpacity: number;
 }
 
 export interface AIAdvice {
