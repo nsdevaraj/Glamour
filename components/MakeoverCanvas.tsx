@@ -536,7 +536,7 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
     >
       <video
         ref={videoRef}
-        className="hidden" // Hidden because we draw the frame on canvas
+        className="absolute opacity-0 pointer-events-none -z-10" // Hidden visually but active in DOM
         playsInline
         muted
         autoPlay
