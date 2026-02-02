@@ -40,14 +40,14 @@ const drawShape = (
 ) => {
   if (opacity <= 0.01) return;
 
-  const path = new Path2D();
+  ctx.beginPath();
   const firstPoint = landmarks[indices[0]];
-  path.moveTo(firstPoint.x * ctx.canvas.width, firstPoint.y * ctx.canvas.height);
+  ctx.moveTo(firstPoint.x * ctx.canvas.width, firstPoint.y * ctx.canvas.height);
   for (let i = 1; i < indices.length; i++) {
     const p = landmarks[indices[i]];
-    path.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
+    ctx.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
   }
-  path.closePath();
+  ctx.closePath();
 
   ctx.save();
   ctx.globalCompositeOperation = composite;
@@ -56,12 +56,12 @@ const drawShape = (
   ctx.filter = `blur(${baseBlur}px)`;
   ctx.globalAlpha = opacity * 0.5;
   ctx.fillStyle = color;
-  ctx.fill(path);
+  ctx.fill();
 
   // Layer 2: Inner definition (slightly more focused color)
   ctx.filter = `blur(${baseBlur * 0.5}px)`;
   ctx.globalAlpha = opacity * 0.5;
-  ctx.fill(path);
+  ctx.fill();
 
   ctx.restore();
 };
@@ -74,29 +74,27 @@ const drawLips = (
 ) => {
   if (opacity <= 0.01) return;
 
-  // Create paths for outer and inner lips
-  const outerPath = new Path2D();
+  ctx.beginPath();
+
+  // Outer lips
   const outerIndices = FACEMESH_LIPS_FULL;
   const p0 = landmarks[outerIndices[0]];
-  outerPath.moveTo(p0.x * ctx.canvas.width, p0.y * ctx.canvas.height);
+  ctx.moveTo(p0.x * ctx.canvas.width, p0.y * ctx.canvas.height);
   for (let i = 1; i < outerIndices.length; i++) {
       const p = landmarks[outerIndices[i]];
-      outerPath.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
+      ctx.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
   }
-  outerPath.closePath();
+  ctx.closePath();
 
-  const innerPath = new Path2D();
+  // Inner lips (hole)
   const innerIndices = FACEMESH_LIPS_INNER;
   const pIn0 = landmarks[innerIndices[0]];
-  innerPath.moveTo(pIn0.x * ctx.canvas.width, pIn0.y * ctx.canvas.height);
+  ctx.moveTo(pIn0.x * ctx.canvas.width, pIn0.y * ctx.canvas.height);
   for (let i = 1; i < innerIndices.length; i++) {
       const p = landmarks[innerIndices[i]];
-      innerPath.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
+      ctx.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
   }
-  innerPath.closePath();
-
-  // Combine paths (Outer + Inner) for even-odd fill
-  outerPath.addPath(innerPath);
+  ctx.closePath();
 
   // Pass 1: Soft Light (Texture preservation, faint)
   ctx.save();
@@ -104,7 +102,7 @@ const drawLips = (
   ctx.fillStyle = color;
   ctx.globalCompositeOperation = 'soft-light';
   ctx.filter = 'blur(4px)';
-  ctx.fill(outerPath, 'evenodd');
+  ctx.fill('evenodd');
   ctx.restore();
 
   // Pass 2: Color Bleed (Smudged edge)
@@ -113,7 +111,7 @@ const drawLips = (
   ctx.fillStyle = color;
   ctx.globalCompositeOperation = 'source-over';
   ctx.filter = 'blur(6px)';
-  ctx.fill(outerPath, 'evenodd');
+  ctx.fill('evenodd');
   ctx.restore();
 
   // Pass 3: Core Color (Definition)
@@ -122,7 +120,7 @@ const drawLips = (
   ctx.fillStyle = color;
   ctx.globalCompositeOperation = 'source-over';
   ctx.filter = 'blur(2px)';
-  ctx.fill(outerPath, 'evenodd');
+  ctx.fill('evenodd');
   ctx.restore();
 };
 
@@ -133,28 +131,28 @@ const drawTeeth = (
 ) => {
   if (intensity <= 0.01) return;
 
-  const path = new Path2D();
+  ctx.beginPath();
   const indices = FACEMESH_LIPS_INNER;
   const p0 = landmarks[indices[0]];
-  path.moveTo(p0.x * ctx.canvas.width, p0.y * ctx.canvas.height);
+  ctx.moveTo(p0.x * ctx.canvas.width, p0.y * ctx.canvas.height);
   for (let i = 1; i < indices.length; i++) {
     const p = landmarks[indices[i]];
-    path.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
+    ctx.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
   }
-  path.closePath();
+  ctx.closePath();
 
   ctx.save();
   ctx.globalAlpha = intensity * 0.8;
   ctx.fillStyle = '#FFFFFF';
   ctx.globalCompositeOperation = 'soft-light'; // Soft lightening
   ctx.filter = 'blur(3px)';
-  ctx.fill(path);
+  ctx.fill();
 
   // Add a second pass for extra brightness if intensity is high
   if (intensity > 0.5) {
       ctx.globalAlpha = (intensity - 0.5) * 0.4;
       ctx.globalCompositeOperation = 'screen';
-      ctx.fill(path);
+      ctx.fill();
   }
 
   ctx.restore();
