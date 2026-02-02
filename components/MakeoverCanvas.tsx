@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { MakeupConfig } from '../types';
 import {
   FACEMESH_LIPS_FULL,
@@ -21,12 +21,400 @@ interface MakeoverCanvasProps {
   config: MakeupConfig;
 }
 
+// Optimization: Pre-calculate indices to avoid slicing/spreading every frame
+const HAIRLINE_INDICES = [
+  ...FACEMESH_FACE_OVAL.slice(28), // Right Ear (234) -> Top
+  ...FACEMESH_FACE_OVAL.slice(0, 9)  // Top -> Left Ear (454)
+];
+
+// --- Drawing Helpers (Moved outside component to avoid re-creation & optimize GC) ---
+
+const drawShape = (
+  ctx: CanvasRenderingContext2D,
+  landmarks: any[],
+  indices: number[],
+  color: string,
+  opacity: number,
+  baseBlur: number = 10,
+  composite: GlobalCompositeOperation = 'multiply'
+) => {
+  if (opacity <= 0.01) return;
+
+  const path = new Path2D();
+  const firstPoint = landmarks[indices[0]];
+  path.moveTo(firstPoint.x * ctx.canvas.width, firstPoint.y * ctx.canvas.height);
+  for (let i = 1; i < indices.length; i++) {
+    const p = landmarks[indices[i]];
+    path.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
+  }
+  path.closePath();
+
+  ctx.save();
+  ctx.globalCompositeOperation = composite;
+
+  // Layer 1: Wide diffuse smudge (soft edge)
+  ctx.filter = `blur(${baseBlur}px)`;
+  ctx.globalAlpha = opacity * 0.5;
+  ctx.fillStyle = color;
+  ctx.fill(path);
+
+  // Layer 2: Inner definition (slightly more focused color)
+  ctx.filter = `blur(${baseBlur * 0.5}px)`;
+  ctx.globalAlpha = opacity * 0.5;
+  ctx.fill(path);
+
+  ctx.restore();
+};
+
+const drawLips = (
+  ctx: CanvasRenderingContext2D,
+  landmarks: any[],
+  color: string,
+  opacity: number
+) => {
+  if (opacity <= 0.01) return;
+
+  // Create paths for outer and inner lips
+  const outerPath = new Path2D();
+  const outerIndices = FACEMESH_LIPS_FULL;
+  const p0 = landmarks[outerIndices[0]];
+  outerPath.moveTo(p0.x * ctx.canvas.width, p0.y * ctx.canvas.height);
+  for (let i = 1; i < outerIndices.length; i++) {
+      const p = landmarks[outerIndices[i]];
+      outerPath.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
+  }
+  outerPath.closePath();
+
+  const innerPath = new Path2D();
+  const innerIndices = FACEMESH_LIPS_INNER;
+  const pIn0 = landmarks[innerIndices[0]];
+  innerPath.moveTo(pIn0.x * ctx.canvas.width, pIn0.y * ctx.canvas.height);
+  for (let i = 1; i < innerIndices.length; i++) {
+      const p = landmarks[innerIndices[i]];
+      innerPath.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
+  }
+  innerPath.closePath();
+
+  // Combine paths (Outer + Inner) for even-odd fill
+  outerPath.addPath(innerPath);
+
+  // Pass 1: Soft Light (Texture preservation, faint)
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  ctx.fillStyle = color;
+  ctx.globalCompositeOperation = 'soft-light';
+  ctx.filter = 'blur(4px)';
+  ctx.fill(outerPath, 'evenodd');
+  ctx.restore();
+
+  // Pass 2: Color Bleed (Smudged edge)
+  ctx.save();
+  ctx.globalAlpha = opacity * 0.6;
+  ctx.fillStyle = color;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.filter = 'blur(6px)';
+  ctx.fill(outerPath, 'evenodd');
+  ctx.restore();
+
+  // Pass 3: Core Color (Definition)
+  ctx.save();
+  ctx.globalAlpha = opacity * 0.4;
+  ctx.fillStyle = color;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.filter = 'blur(2px)';
+  ctx.fill(outerPath, 'evenodd');
+  ctx.restore();
+};
+
+const drawTeeth = (
+  ctx: CanvasRenderingContext2D,
+  landmarks: any[],
+  intensity: number
+) => {
+  if (intensity <= 0.01) return;
+
+  const path = new Path2D();
+  const indices = FACEMESH_LIPS_INNER;
+  const p0 = landmarks[indices[0]];
+  path.moveTo(p0.x * ctx.canvas.width, p0.y * ctx.canvas.height);
+  for (let i = 1; i < indices.length; i++) {
+    const p = landmarks[indices[i]];
+    path.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
+  }
+  path.closePath();
+
+  ctx.save();
+  ctx.globalAlpha = intensity * 0.8;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.globalCompositeOperation = 'soft-light'; // Soft lightening
+  ctx.filter = 'blur(3px)';
+  ctx.fill(path);
+
+  // Add a second pass for extra brightness if intensity is high
+  if (intensity > 0.5) {
+      ctx.globalAlpha = (intensity - 0.5) * 0.4;
+      ctx.globalCompositeOperation = 'screen';
+      ctx.fill(path);
+  }
+
+  ctx.restore();
+}
+
+// Optimization: Avoid allocation of intermediate arrays/objects
+const drawHair = (
+  ctx: CanvasRenderingContext2D,
+  landmarks: any[],
+  color: string,
+  opacity: number
+) => {
+  if (opacity <= 0.01) return;
+
+  const center = landmarks[168];
+  if (!center) return;
+
+  if (HAIRLINE_INDICES.length < 5) return;
+
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  ctx.fillStyle = color;
+  // 'color' blends hue/saturation while keeping luma (good for hair dye)
+  ctx.globalCompositeOperation = 'color';
+  ctx.filter = 'blur(15px)';
+
+  ctx.beginPath();
+  const w = ctx.canvas.width;
+  const h = ctx.canvas.height;
+
+  // Inner curve (Hairline)
+  const startP = landmarks[HAIRLINE_INDICES[0]];
+  ctx.moveTo(startP.x * w, startP.y * h);
+  for (let i = 1; i < HAIRLINE_INDICES.length; i++) {
+      const p = landmarks[HAIRLINE_INDICES[i]];
+      ctx.lineTo(p.x * w, p.y * h);
+  }
+
+  // Outer curve (Top of head) - reverse order, computed on fly
+  const len = HAIRLINE_INDICES.length;
+  for (let i = len - 1; i >= 0; i--) {
+      const p = landmarks[HAIRLINE_INDICES[i]];
+      const dx = p.x - center.x;
+      const dy = p.y - center.y;
+
+      const t = i / (len - 1);
+      const curve = 4 * t * (1 - t);
+      const scale = 1.3 + (1.5 * curve);
+
+      const x = center.x + dx * scale;
+      const y = center.y + dy * scale;
+
+      ctx.lineTo(x * w, y * h);
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  // Second pass for deeper color
+  ctx.globalCompositeOperation = 'soft-light';
+  ctx.globalAlpha = opacity * 0.6;
+  ctx.fill();
+
+  ctx.restore();
+};
+
+const drawStroke = (
+  ctx: CanvasRenderingContext2D,
+  landmarks: any[],
+  indices: number[],
+  color: string,
+  opacity: number,
+  width: number = 2
+) => {
+  if (opacity <= 0.01) return;
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.filter = 'blur(2px)';
+
+  ctx.beginPath();
+  const firstPoint = landmarks[indices[0]];
+  ctx.moveTo(firstPoint.x * ctx.canvas.width, firstPoint.y * ctx.canvas.height);
+
+  for (let i = 1; i < indices.length; i++) {
+    const point = landmarks[indices[i]];
+    ctx.lineTo(point.x * ctx.canvas.width, point.y * ctx.canvas.height);
+  }
+  ctx.stroke();
+  ctx.restore();
+};
+
+// Optimization: Avoid allocation of 'pts' array and sorting
+const drawBlush = (
+  ctx: CanvasRenderingContext2D,
+  landmarks: any[],
+  indices: number[],
+  color: string,
+  opacity: number
+) => {
+  if (opacity <= 0.01) return;
+
+  let sumX = 0, sumY = 0;
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+
+  let pLeftX = 0, pLeftY = 0;
+  let pRightX = 0, pRightY = 0;
+
+  const w = ctx.canvas.width;
+  const h = ctx.canvas.height;
+  const len = indices.length;
+
+  if (len === 0) return;
+
+  for (const i of indices) {
+    const p = landmarks[i];
+    const x = p.x * w;
+    const y = p.y * h;
+
+    sumX += x;
+    sumY += y;
+    
+    if (x < minX) {
+        minX = x;
+        pLeftX = x;
+        pLeftY = y;
+    }
+    if (x > maxX) {
+        maxX = x;
+        pRightX = x;
+        pRightY = y;
+    }
+
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+
+  const centerX = sumX / len;
+  const centerY = sumY / len;
+
+  // Estimate Orientation
+  const dx = pRightX - pLeftX;
+  const dy = pRightY - pLeftY;
+  const rotation = Math.atan2(dy, dx);
+  const length = Math.sqrt(dx*dx + dy*dy);
+  const height = maxY - minY;
+
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.globalCompositeOperation = 'multiply';
+
+  // Pass 1: Very wide dispersion
+  ctx.globalAlpha = opacity * 0.4;
+  ctx.filter = 'blur(25px)';
+  ctx.beginPath();
+  ctx.ellipse(centerX, centerY, length * 0.6, height * 0.7, rotation, 0, 2 * Math.PI);
+  ctx.fill();
+
+  // Pass 2: Slightly more focused center
+  ctx.globalAlpha = opacity * 0.6;
+  ctx.filter = 'blur(15px)';
+  ctx.beginPath();
+  ctx.ellipse(centerX, centerY, length * 0.4, height * 0.5, rotation, 0, 2 * Math.PI);
+  ctx.fill();
+
+  ctx.restore();
+};
+
+const drawBindi = (ctx: CanvasRenderingContext2D, landmarks: any[], color: string) => {
+    const center = landmarks[LANDMARK_BINDI];
+    const noseTop = landmarks[168]; // Roughly between eyes
+    
+    const dy = center.y - noseTop.y;
+    const size = Math.abs(dy * ctx.canvas.height) * 0.4;
+
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 2;
+    ctx.filter = 'blur(0.5px)'; // Slight softness to edge
+    ctx.beginPath();
+    ctx.arc(center.x * ctx.canvas.width, (center.y * ctx.canvas.height) - (size), size, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.restore();
+}
+
+const drawNoseRing = (
+  ctx: CanvasRenderingContext2D,
+  landmarks: any[],
+  opacity: number,
+  img: HTMLImageElement | null
+) => {
+  if (opacity <= 0.01 || !img) return;
+
+  const nosePoint = landmarks[LANDMARK_NOSE_LEFT];
+  const leftFace = landmarks[234];
+  const rightFace = landmarks[454];
+  if (!leftFace || !rightFace || !nosePoint) return;
+
+  const faceWidth = Math.sqrt(Math.pow(rightFace.x - leftFace.x, 2) + Math.pow(rightFace.y - leftFace.y, 2));
+
+  // Scale factor
+  const size = faceWidth * ctx.canvas.width * 0.12;
+  const x = nosePoint.x * ctx.canvas.width - size / 2;
+  const y = nosePoint.y * ctx.canvas.height - size / 2;
+
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  ctx.drawImage(img, x, y, size, size);
+  ctx.restore();
+};
+
+const drawEarrings = (
+  ctx: CanvasRenderingContext2D,
+  landmarks: any[],
+  opacity: number,
+  img: HTMLImageElement | null
+) => {
+  if (opacity <= 0.01 || !img) return;
+
+  const leftFace = landmarks[234];
+  const rightFace = landmarks[454];
+  if (!leftFace || !rightFace) return;
+
+  const faceWidth = Math.sqrt(Math.pow(rightFace.x - leftFace.x, 2) + Math.pow(rightFace.y - leftFace.y, 2));
+  const size = faceWidth * ctx.canvas.width * 0.15;
+
+  // Left Ear Area
+  const pLeft = landmarks[LANDMARK_EAR_LEFT];
+  if (pLeft) {
+       // Offset slightly outwards relative to face center
+       const xLeft = pLeft.x * ctx.canvas.width - size/2 - (faceWidth * ctx.canvas.width * 0.05);
+       const yLeft = pLeft.y * ctx.canvas.height;
+       ctx.save();
+       ctx.globalAlpha = opacity;
+       ctx.drawImage(img, xLeft, yLeft, size, size);
+       ctx.restore();
+  }
+
+  // Right Ear Area
+  const pRight = landmarks[LANDMARK_EAR_RIGHT];
+  if (pRight) {
+       const xRight = pRight.x * ctx.canvas.width - size/2 + (faceWidth * ctx.canvas.width * 0.05);
+       const yRight = pRight.y * ctx.canvas.height;
+       ctx.save();
+       ctx.globalAlpha = opacity;
+       ctx.drawImage(img, xRight, yRight, size, size);
+       ctx.restore();
+  }
+};
+
 const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [modelLoaded, setModelLoaded] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  
+
   // Comparison Slider State
   const [isCompareMode, setIsCompareMode] = useState(false);
   const [sliderPos, setSliderPos] = useState(50);
@@ -64,393 +452,6 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
           isMountedRef.current = false;
       };
   }, []);
-
-  // Helper to draw a shape with realistic smudged edges
-  const drawShape = (
-    ctx: CanvasRenderingContext2D,
-    landmarks: any[],
-    indices: number[],
-    color: string,
-    opacity: number,
-    baseBlur: number = 10,
-    composite: GlobalCompositeOperation = 'multiply'
-  ) => {
-    if (opacity <= 0.01) return;
-
-    const path = new Path2D();
-    const firstPoint = landmarks[indices[0]];
-    path.moveTo(firstPoint.x * ctx.canvas.width, firstPoint.y * ctx.canvas.height);
-    for (let i = 1; i < indices.length; i++) {
-      const p = landmarks[indices[i]];
-      path.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
-    }
-    path.closePath();
-
-    ctx.save();
-    ctx.globalCompositeOperation = composite;
-    
-    // Layer 1: Wide diffuse smudge (soft edge)
-    ctx.filter = `blur(${baseBlur}px)`;
-    ctx.globalAlpha = opacity * 0.5;
-    ctx.fillStyle = color;
-    ctx.fill(path);
-
-    // Layer 2: Inner definition (slightly more focused color)
-    ctx.filter = `blur(${baseBlur * 0.5}px)`;
-    ctx.globalAlpha = opacity * 0.5;
-    ctx.fill(path);
-    
-    ctx.restore();
-  };
-
-  // Dedicated Lips Drawer with inner mouth hole and soft edges
-  const drawLips = (
-    ctx: CanvasRenderingContext2D,
-    landmarks: any[],
-    color: string,
-    opacity: number
-  ) => {
-    if (opacity <= 0.01) return;
-
-    // Create paths for outer and inner lips
-    const outerPath = new Path2D();
-    const outerIndices = FACEMESH_LIPS_FULL;
-    const p0 = landmarks[outerIndices[0]];
-    outerPath.moveTo(p0.x * ctx.canvas.width, p0.y * ctx.canvas.height);
-    for (let i = 1; i < outerIndices.length; i++) {
-        const p = landmarks[outerIndices[i]];
-        outerPath.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
-    }
-    outerPath.closePath();
-
-    const innerPath = new Path2D();
-    const innerIndices = FACEMESH_LIPS_INNER;
-    const pIn0 = landmarks[innerIndices[0]];
-    innerPath.moveTo(pIn0.x * ctx.canvas.width, pIn0.y * ctx.canvas.height);
-    for (let i = 1; i < innerIndices.length; i++) {
-        const p = landmarks[innerIndices[i]];
-        innerPath.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
-    }
-    innerPath.closePath();
-
-    // Combine paths (Outer + Inner) for even-odd fill
-    outerPath.addPath(innerPath);
-
-    // Pass 1: Soft Light (Texture preservation, faint)
-    ctx.save();
-    ctx.globalAlpha = opacity;
-    ctx.fillStyle = color;
-    ctx.globalCompositeOperation = 'soft-light';
-    ctx.filter = 'blur(4px)'; 
-    ctx.fill(outerPath, 'evenodd');
-    ctx.restore();
-
-    // Pass 2: Color Bleed (Smudged edge)
-    ctx.save();
-    ctx.globalAlpha = opacity * 0.6;
-    ctx.fillStyle = color;
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.filter = 'blur(6px)'; 
-    ctx.fill(outerPath, 'evenodd');
-    ctx.restore();
-    
-    // Pass 3: Core Color (Definition)
-    ctx.save();
-    ctx.globalAlpha = opacity * 0.4;
-    ctx.fillStyle = color;
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.filter = 'blur(2px)';
-    ctx.fill(outerPath, 'evenodd');
-    ctx.restore();
-  };
-
-  // Teeth Whitening: Fills the inner mouth area with white using 'soft-light'
-  const drawTeeth = (
-    ctx: CanvasRenderingContext2D,
-    landmarks: any[],
-    intensity: number
-  ) => {
-    if (intensity <= 0.01) return;
-
-    const path = new Path2D();
-    const indices = FACEMESH_LIPS_INNER;
-    const p0 = landmarks[indices[0]];
-    path.moveTo(p0.x * ctx.canvas.width, p0.y * ctx.canvas.height);
-    for (let i = 1; i < indices.length; i++) {
-      const p = landmarks[indices[i]];
-      path.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
-    }
-    path.closePath();
-
-    ctx.save();
-    ctx.globalAlpha = intensity * 0.8; 
-    ctx.fillStyle = '#FFFFFF';
-    ctx.globalCompositeOperation = 'soft-light'; // Soft lightening
-    ctx.filter = 'blur(3px)';
-    ctx.fill(path);
-    
-    // Add a second pass for extra brightness if intensity is high
-    if (intensity > 0.5) {
-        ctx.globalAlpha = (intensity - 0.5) * 0.4;
-        ctx.globalCompositeOperation = 'screen'; 
-        ctx.fill(path);
-    }
-    
-    ctx.restore();
-  }
-
-  // Hair Tinting: Extrudes the upper face oval to create a "halo" tint
-  const drawHair = (
-    ctx: CanvasRenderingContext2D,
-    landmarks: any[],
-    color: string,
-    opacity: number
-  ) => {
-    if (opacity <= 0.01) return;
-
-    // Center pivot (Nose bridge)
-    const center = landmarks[168]; 
-    if (!center) return;
-
-    // Filter points from face oval that are roughly the hairline (above nose)
-    // New Logic: Use topology to extract the exact hairline from ear to ear.
-    // FACEMESH_FACE_OVAL is ordered: 10 (Top), ... 454 (Left Ear), ... 152 (Chin), ... 234 (Right Ear), ... 109.
-
-    // Segment 1: Right Ear (234) -> Top (109). Indices 28..35
-    const rightSideIndices = FACEMESH_FACE_OVAL.slice(28); // 234...109
-    // Segment 2: Top (10) -> Left Ear (454). Indices 0..8
-    const leftSideIndices = FACEMESH_FACE_OVAL.slice(0, 9); // 10...454
-
-    // Combine to get continuous line: Right Ear -> Top -> Left Ear
-    const hairlineIndices = [...rightSideIndices, ...leftSideIndices];
-    const hairlinePoints = hairlineIndices.map(idx => landmarks[idx]);
-
-    if (hairlinePoints.length < 5) return;
-
-    // Create outer arc by expanding points from center with variable extrusion
-    const outerPoints = hairlinePoints.map((p, i) => {
-        const dx = p.x - center.x;
-        const dy = p.y - center.y;
-
-        // Calculate factor based on position in array.
-        // Normalize index to 0..1 (0=Right Ear, 0.5=Top, 1=Left Ear)
-        const t = i / (hairlinePoints.length - 1);
-
-        // Parabolic curve for extrusion: Max at 0.5, Min at 0 and 1.
-        // Formula: 4 * t * (1 - t) gives 0 at ends, 1 at center.
-        const curve = 4 * t * (1 - t);
-
-        // Base scale (sides) + Extra scale (top)
-        // Sides: 1.3, Top: 1.3 + 1.5 = 2.8
-        const scale = 1.3 + (1.5 * curve);
-
-        return { 
-            x: center.x + dx * scale, 
-            y: center.y + dy * scale 
-        };
-    });
-
-    ctx.save();
-    ctx.globalAlpha = opacity;
-    ctx.fillStyle = color;
-    // 'color' blends hue/saturation while keeping luma (good for hair dye)
-    // fallback to 'overlay' if strict color mode isn't desired
-    ctx.globalCompositeOperation = 'color'; 
-    ctx.filter = 'blur(15px)'; // Reduced blur slightly for better definition
-
-    ctx.beginPath();
-    // Inner curve (Hairline)
-    const startP = hairlinePoints[0];
-    ctx.moveTo(startP.x * ctx.canvas.width, startP.y * ctx.canvas.height);
-    for (let i = 1; i < hairlinePoints.length; i++) {
-        const p = hairlinePoints[i];
-        ctx.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
-    }
-    // Outer curve (Top of head) - reverse order
-    for (let i = outerPoints.length - 1; i >= 0; i--) {
-        const p = outerPoints[i];
-        ctx.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
-    }
-    ctx.closePath();
-    ctx.fill();
-
-    // Second pass for deeper color
-    ctx.globalCompositeOperation = 'soft-light';
-    ctx.globalAlpha = opacity * 0.6;
-    ctx.fill();
-
-    ctx.restore();
-  };
-
-  // Helper to draw a stroke
-  const drawStroke = (
-    ctx: CanvasRenderingContext2D,
-    landmarks: any[],
-    indices: number[],
-    color: string,
-    opacity: number,
-    width: number = 2
-  ) => {
-    if (opacity <= 0.01) return;
-    ctx.save();
-    ctx.globalAlpha = opacity;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = width;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    // Slight blur for eyeliner so it looks applied, not vector-drawn
-    ctx.filter = 'blur(2px)'; 
-    
-    ctx.beginPath();
-    const firstPoint = landmarks[indices[0]];
-    ctx.moveTo(firstPoint.x * ctx.canvas.width, firstPoint.y * ctx.canvas.height);
-
-    for (let i = 1; i < indices.length; i++) {
-      const point = landmarks[indices[i]];
-      ctx.lineTo(point.x * ctx.canvas.width, point.y * ctx.canvas.height);
-    }
-    ctx.stroke();
-    ctx.restore();
-  };
-
-  // Elliptical Blush with heavy smudge
-  const drawBlush = (
-    ctx: CanvasRenderingContext2D,
-    landmarks: any[],
-    indices: number[],
-    color: string,
-    opacity: number
-  ) => {
-    if (opacity <= 0.01) return;
-
-    // 1. Calculate Centroid
-    let sumX = 0, sumY = 0;
-    const pts = indices.map(i => {
-      const p = landmarks[i];
-      return { x: p.x * ctx.canvas.width, y: p.y * ctx.canvas.height };
-    });
-
-    if (pts.length === 0) return;
-
-    pts.forEach(p => {
-      sumX += p.x;
-      sumY += p.y;
-    });
-    
-    const centerX = sumX / pts.length;
-    const centerY = sumY / pts.length;
-
-    // 2. Estimate Orientation and Size
-    pts.sort((a, b) => a.x - b.x);
-    const left = pts[0];
-    const right = pts[pts.length - 1];
-    
-    const dx = right.x - left.x;
-    const dy = right.y - left.y;
-    const rotation = Math.atan2(dy, dx);
-    const length = Math.sqrt(dx*dx + dy*dy);
-    
-    let minY = Infinity, maxY = -Infinity;
-    pts.forEach(p => {
-        minY = Math.min(minY, p.y);
-        maxY = Math.max(maxY, p.y);
-    });
-    const height = maxY - minY;
-
-    ctx.save();
-    ctx.fillStyle = color;
-    ctx.globalCompositeOperation = 'multiply'; 
-    
-    // Pass 1: Very wide dispersion
-    ctx.globalAlpha = opacity * 0.4;
-    ctx.filter = 'blur(25px)'; 
-    ctx.beginPath();
-    ctx.ellipse(centerX, centerY, length * 0.6, height * 0.7, rotation, 0, 2 * Math.PI);
-    ctx.fill();
-
-    // Pass 2: Slightly more focused center
-    ctx.globalAlpha = opacity * 0.6;
-    ctx.filter = 'blur(15px)';
-    ctx.beginPath();
-    ctx.ellipse(centerX, centerY, length * 0.4, height * 0.5, rotation, 0, 2 * Math.PI);
-    ctx.fill();
-
-    ctx.restore();
-  };
-
-  const drawBindi = (ctx: CanvasRenderingContext2D, landmarks: any[], color: string) => {
-      const center = landmarks[LANDMARK_BINDI];
-      const noseTop = landmarks[168]; // Roughly between eyes
-      
-      const dy = center.y - noseTop.y;
-      const size = Math.abs(dy * ctx.canvas.height) * 0.4;
-
-      ctx.save();
-      ctx.fillStyle = color;
-      ctx.shadowColor = 'rgba(0,0,0,0.5)';
-      ctx.shadowBlur = 2;
-      ctx.filter = 'blur(0.5px)'; // Slight softness to edge
-      ctx.beginPath();
-      ctx.arc(center.x * ctx.canvas.width, (center.y * ctx.canvas.height) - (size), size, 0, 2 * Math.PI);
-      ctx.fill();
-      ctx.restore();
-  }
-
-  const drawNoseRing = (ctx: CanvasRenderingContext2D, landmarks: any[], opacity: number) => {
-    if (opacity <= 0.01 || !noseRingImg.current) return;
-
-    const nosePoint = landmarks[LANDMARK_NOSE_LEFT];
-    // Use face width to scale (distance between cheekbones 234 and 454)
-    const leftFace = landmarks[234];
-    const rightFace = landmarks[454];
-    if (!leftFace || !rightFace || !nosePoint) return;
-
-    const faceWidth = Math.sqrt(Math.pow(rightFace.x - leftFace.x, 2) + Math.pow(rightFace.y - leftFace.y, 2));
-
-    // Scale factor
-    const size = faceWidth * ctx.canvas.width * 0.12;
-    const x = nosePoint.x * ctx.canvas.width - size / 2;
-    const y = nosePoint.y * ctx.canvas.height - size / 2;
-
-    ctx.save();
-    ctx.globalAlpha = opacity;
-    ctx.drawImage(noseRingImg.current, x, y, size, size);
-    ctx.restore();
-  };
-
-  const drawEarrings = (ctx: CanvasRenderingContext2D, landmarks: any[], opacity: number) => {
-    if (opacity <= 0.01 || !earringImg.current) return;
-
-    const leftFace = landmarks[234];
-    const rightFace = landmarks[454];
-    if (!leftFace || !rightFace) return;
-
-    const faceWidth = Math.sqrt(Math.pow(rightFace.x - leftFace.x, 2) + Math.pow(rightFace.y - leftFace.y, 2));
-    const size = faceWidth * ctx.canvas.width * 0.15;
-
-    // Left Ear Area
-    const pLeft = landmarks[LANDMARK_EAR_LEFT];
-    if (pLeft) {
-         // Offset slightly outwards relative to face center
-         const xLeft = pLeft.x * ctx.canvas.width - size/2 - (faceWidth * ctx.canvas.width * 0.05);
-         const yLeft = pLeft.y * ctx.canvas.height;
-         ctx.save();
-         ctx.globalAlpha = opacity;
-         ctx.drawImage(earringImg.current, xLeft, yLeft, size, size);
-         ctx.restore();
-    }
-
-    // Right Ear Area
-    const pRight = landmarks[LANDMARK_EAR_RIGHT];
-    if (pRight) {
-         const xRight = pRight.x * ctx.canvas.width - size/2 + (faceWidth * ctx.canvas.width * 0.05);
-         const yRight = pRight.y * ctx.canvas.height;
-         ctx.save();
-         ctx.globalAlpha = opacity;
-         ctx.drawImage(earringImg.current, xRight, yRight, size, size);
-         ctx.restore();
-    }
-  };
 
   useEffect(() => {
     let faceMesh: any;
@@ -543,10 +544,10 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
           drawBindi(ctx, landmarks, currentConfig.accessoryColor);
         }
         if (currentConfig.enableNoseRing) {
-            drawNoseRing(ctx, landmarks, currentConfig.noseRingOpacity);
+            drawNoseRing(ctx, landmarks, currentConfig.noseRingOpacity, noseRingImg.current);
         }
         if (currentConfig.enableEarrings) {
-            drawEarrings(ctx, landmarks, currentConfig.earringsOpacity);
+            drawEarrings(ctx, landmarks, currentConfig.earringsOpacity, earringImg.current);
         }
       }
       
