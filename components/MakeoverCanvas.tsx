@@ -31,6 +31,8 @@ const HAIRLINE_INDICES = [
 
 const drawShape = (
   ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
   landmarks: any[],
   indices: number[],
   color: string,
@@ -39,9 +41,6 @@ const drawShape = (
   composite: GlobalCompositeOperation = 'multiply'
 ) => {
   if (opacity <= 0.01) return;
-
-  const w = ctx.canvas.width;
-  const h = ctx.canvas.height;
 
   ctx.beginPath();
   const firstPoint = landmarks[indices[0]];
@@ -71,14 +70,13 @@ const drawShape = (
 
 const drawLips = (
   ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
   landmarks: any[],
   color: string,
   opacity: number
 ) => {
   if (opacity <= 0.01) return;
-
-  const w = ctx.canvas.width;
-  const h = ctx.canvas.height;
 
   ctx.beginPath();
 
@@ -132,13 +130,12 @@ const drawLips = (
 
 const drawTeeth = (
   ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
   landmarks: any[],
   intensity: number
 ) => {
   if (intensity <= 0.01) return;
-
-  const w = ctx.canvas.width;
-  const h = ctx.canvas.height;
 
   ctx.beginPath();
   const indices = FACEMESH_LIPS_INNER;
@@ -170,6 +167,8 @@ const drawTeeth = (
 // Optimization: Avoid allocation of intermediate arrays/objects
 const drawHair = (
   ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
   landmarks: any[],
   color: string,
   opacity: number
@@ -189,8 +188,6 @@ const drawHair = (
   ctx.filter = 'blur(15px)';
 
   ctx.beginPath();
-  const w = ctx.canvas.width;
-  const h = ctx.canvas.height;
 
   // Inner curve (Hairline)
   const startP = landmarks[HAIRLINE_INDICES[0]];
@@ -229,6 +226,8 @@ const drawHair = (
 
 const drawStroke = (
   ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
   landmarks: any[],
   indices: number[],
   color: string,
@@ -236,9 +235,6 @@ const drawStroke = (
   width: number = 2
 ) => {
   if (opacity <= 0.01) return;
-
-  const w = ctx.canvas.width;
-  const h = ctx.canvas.height;
 
   ctx.save();
   ctx.globalAlpha = opacity;
@@ -263,6 +259,8 @@ const drawStroke = (
 // Optimization: Avoid allocation of 'pts' array and sorting
 const drawBlush = (
   ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
   landmarks: any[],
   indices: number[],
   color: string,
@@ -277,8 +275,6 @@ const drawBlush = (
   let pLeftX = 0, pLeftY = 0;
   let pRightX = 0, pRightY = 0;
 
-  const w = ctx.canvas.width;
-  const h = ctx.canvas.height;
   const len = indices.length;
 
   if (len === 0) return;
@@ -337,10 +333,7 @@ const drawBlush = (
   ctx.restore();
 };
 
-const drawBindi = (ctx: CanvasRenderingContext2D, landmarks: any[], color: string) => {
-    const w = ctx.canvas.width;
-    const h = ctx.canvas.height;
-
+const drawBindi = (ctx: CanvasRenderingContext2D, w: number, h: number, landmarks: any[], color: string) => {
     const center = landmarks[LANDMARK_BINDI];
     const noseTop = landmarks[168]; // Roughly between eyes
     
@@ -360,14 +353,13 @@ const drawBindi = (ctx: CanvasRenderingContext2D, landmarks: any[], color: strin
 
 const drawNoseRing = (
   ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
   landmarks: any[],
   opacity: number,
   img: HTMLImageElement | null
 ) => {
   if (opacity <= 0.01 || !img) return;
-
-  const w = ctx.canvas.width;
-  const h = ctx.canvas.height;
 
   const nosePoint = landmarks[LANDMARK_NOSE_LEFT];
   const leftFace = landmarks[234];
@@ -389,14 +381,13 @@ const drawNoseRing = (
 
 const drawEarrings = (
   ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
   landmarks: any[],
   opacity: number,
   img: HTMLImageElement | null
 ) => {
   if (opacity <= 0.01 || !img) return;
-
-  const w = ctx.canvas.width;
-  const h = ctx.canvas.height;
 
   const leftFace = landmarks[234];
   const rightFace = landmarks[454];
@@ -505,6 +496,9 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
       }
+      // Bolt: Hoist canvas dimensions to avoid repeated DOM access in drawing loops
+      const w = canvas.width;
+      const h = canvas.height;
 
       const currentConfig = configRef.current;
       const isCompare = isCompareModeRef.current;
@@ -513,60 +507,60 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
       ctx.save();
       
       // Draw background from video frame
-      ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(results.image, 0, 0, w, h);
 
       // Compare Split
       if (isCompare) {
         const percent = sliderVal / 100;
-        const startX = canvas.width * (1 - percent);
-        const regionWidth = canvas.width * percent;
+        const startX = w * (1 - percent);
+        const regionWidth = w * percent;
         ctx.beginPath();
-        ctx.rect(startX, 0, regionWidth, canvas.height);
+        ctx.rect(startX, 0, regionWidth, h);
         ctx.clip();
       }
 
       for (const landmarks of results.multiFaceLandmarks) {
         // 1. Foundation (High blur, subtle)
         if (currentConfig.enableFace) {
-            drawShape(ctx, landmarks, FACEMESH_FACE_OVAL, currentConfig.foundationTone, currentConfig.foundationOpacity, 30, 'multiply');
+            drawShape(ctx, w, h, landmarks, FACEMESH_FACE_OVAL, currentConfig.foundationTone, currentConfig.foundationOpacity, 30, 'multiply');
             
-            drawBlush(ctx, landmarks, FACEMESH_LEFT_CHEEK, currentConfig.blushColor, currentConfig.blushOpacity);
-            drawBlush(ctx, landmarks, FACEMESH_RIGHT_CHEEK, currentConfig.blushColor, currentConfig.blushOpacity);
+            drawBlush(ctx, w, h, landmarks, FACEMESH_LEFT_CHEEK, currentConfig.blushColor, currentConfig.blushOpacity);
+            drawBlush(ctx, w, h, landmarks, FACEMESH_RIGHT_CHEEK, currentConfig.blushColor, currentConfig.blushOpacity);
         }
 
         // 2. Eyes (Smudged edges)
         if (currentConfig.enableEyes) {
             // Eyeshadow - soft cloud
-            drawShape(ctx, landmarks, FACEMESH_LEFT_EYESHADOW, currentConfig.eyeshadowColor, currentConfig.eyeshadowOpacity, 12, 'multiply');
-            drawShape(ctx, landmarks, FACEMESH_RIGHT_EYESHADOW, currentConfig.eyeshadowColor, currentConfig.eyeshadowOpacity, 12, 'multiply');
+            drawShape(ctx, w, h, landmarks, FACEMESH_LEFT_EYESHADOW, currentConfig.eyeshadowColor, currentConfig.eyeshadowOpacity, 12, 'multiply');
+            drawShape(ctx, w, h, landmarks, FACEMESH_RIGHT_EYESHADOW, currentConfig.eyeshadowColor, currentConfig.eyeshadowOpacity, 12, 'multiply');
             
             // Eyeliner - defined but not crisp
-            drawStroke(ctx, landmarks, FACEMESH_LEFT_EYE_OUTLINE, currentConfig.eyelinerColor, currentConfig.eyelinerOpacity, 2.5);
-            drawStroke(ctx, landmarks, FACEMESH_RIGHT_EYE_OUTLINE, currentConfig.eyelinerColor, currentConfig.eyelinerOpacity, 2.5);
+            drawStroke(ctx, w, h, landmarks, FACEMESH_LEFT_EYE_OUTLINE, currentConfig.eyelinerColor, currentConfig.eyelinerOpacity, 2.5);
+            drawStroke(ctx, w, h, landmarks, FACEMESH_RIGHT_EYE_OUTLINE, currentConfig.eyelinerColor, currentConfig.eyelinerOpacity, 2.5);
         }
         
         // 3. Lips & Teeth
         if (currentConfig.enableLips) {
           if (currentConfig.enableTeeth) {
-             drawTeeth(ctx, landmarks, currentConfig.teethWhiteness);
+             drawTeeth(ctx, w, h, landmarks, currentConfig.teethWhiteness);
           }
-          drawLips(ctx, landmarks, currentConfig.lipColor, currentConfig.lipOpacity);
+          drawLips(ctx, w, h, landmarks, currentConfig.lipColor, currentConfig.lipOpacity);
         }
         
         // 4. Hair
         if (currentConfig.enableHair) {
-            drawHair(ctx, landmarks, currentConfig.hairColor, currentConfig.hairOpacity);
+            drawHair(ctx, w, h, landmarks, currentConfig.hairColor, currentConfig.hairOpacity);
         }
         
         // 5. Accessories
         if (currentConfig.enableAccessories) {
-          drawBindi(ctx, landmarks, currentConfig.accessoryColor);
+          drawBindi(ctx, w, h, landmarks, currentConfig.accessoryColor);
         }
         if (currentConfig.enableNoseRing) {
-            drawNoseRing(ctx, landmarks, currentConfig.noseRingOpacity, noseRingImg.current);
+            drawNoseRing(ctx, w, h, landmarks, currentConfig.noseRingOpacity, noseRingImg.current);
         }
         if (currentConfig.enableEarrings) {
-            drawEarrings(ctx, landmarks, currentConfig.earringsOpacity, earringImg.current);
+            drawEarrings(ctx, w, h, landmarks, currentConfig.earringsOpacity, earringImg.current);
         }
       }
       
