@@ -40,12 +40,15 @@ const drawShape = (
 ) => {
   if (opacity <= 0.01) return;
 
+  const w = ctx.canvas.width;
+  const h = ctx.canvas.height;
+
   ctx.beginPath();
   const firstPoint = landmarks[indices[0]];
-  ctx.moveTo(firstPoint.x * ctx.canvas.width, firstPoint.y * ctx.canvas.height);
+  ctx.moveTo(firstPoint.x * w, firstPoint.y * h);
   for (let i = 1; i < indices.length; i++) {
     const p = landmarks[indices[i]];
-    ctx.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
+    ctx.lineTo(p.x * w, p.y * h);
   }
   ctx.closePath();
 
@@ -74,25 +77,28 @@ const drawLips = (
 ) => {
   if (opacity <= 0.01) return;
 
+  const w = ctx.canvas.width;
+  const h = ctx.canvas.height;
+
   ctx.beginPath();
 
   // Outer lips
   const outerIndices = FACEMESH_LIPS_FULL;
   const p0 = landmarks[outerIndices[0]];
-  ctx.moveTo(p0.x * ctx.canvas.width, p0.y * ctx.canvas.height);
+  ctx.moveTo(p0.x * w, p0.y * h);
   for (let i = 1; i < outerIndices.length; i++) {
       const p = landmarks[outerIndices[i]];
-      ctx.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
+      ctx.lineTo(p.x * w, p.y * h);
   }
   ctx.closePath();
 
   // Inner lips (hole)
   const innerIndices = FACEMESH_LIPS_INNER;
   const pIn0 = landmarks[innerIndices[0]];
-  ctx.moveTo(pIn0.x * ctx.canvas.width, pIn0.y * ctx.canvas.height);
+  ctx.moveTo(pIn0.x * w, pIn0.y * h);
   for (let i = 1; i < innerIndices.length; i++) {
       const p = landmarks[innerIndices[i]];
-      ctx.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
+      ctx.lineTo(p.x * w, p.y * h);
   }
   ctx.closePath();
 
@@ -131,13 +137,16 @@ const drawTeeth = (
 ) => {
   if (intensity <= 0.01) return;
 
+  const w = ctx.canvas.width;
+  const h = ctx.canvas.height;
+
   ctx.beginPath();
   const indices = FACEMESH_LIPS_INNER;
   const p0 = landmarks[indices[0]];
-  ctx.moveTo(p0.x * ctx.canvas.width, p0.y * ctx.canvas.height);
+  ctx.moveTo(p0.x * w, p0.y * h);
   for (let i = 1; i < indices.length; i++) {
     const p = landmarks[indices[i]];
-    ctx.lineTo(p.x * ctx.canvas.width, p.y * ctx.canvas.height);
+    ctx.lineTo(p.x * w, p.y * h);
   }
   ctx.closePath();
 
@@ -227,6 +236,10 @@ const drawStroke = (
   width: number = 2
 ) => {
   if (opacity <= 0.01) return;
+
+  const w = ctx.canvas.width;
+  const h = ctx.canvas.height;
+
   ctx.save();
   ctx.globalAlpha = opacity;
   ctx.strokeStyle = color;
@@ -237,11 +250,11 @@ const drawStroke = (
 
   ctx.beginPath();
   const firstPoint = landmarks[indices[0]];
-  ctx.moveTo(firstPoint.x * ctx.canvas.width, firstPoint.y * ctx.canvas.height);
+  ctx.moveTo(firstPoint.x * w, firstPoint.y * h);
 
   for (let i = 1; i < indices.length; i++) {
     const point = landmarks[indices[i]];
-    ctx.lineTo(point.x * ctx.canvas.width, point.y * ctx.canvas.height);
+    ctx.lineTo(point.x * w, point.y * h);
   }
   ctx.stroke();
   ctx.restore();
@@ -325,11 +338,14 @@ const drawBlush = (
 };
 
 const drawBindi = (ctx: CanvasRenderingContext2D, landmarks: any[], color: string) => {
+    const w = ctx.canvas.width;
+    const h = ctx.canvas.height;
+
     const center = landmarks[LANDMARK_BINDI];
     const noseTop = landmarks[168]; // Roughly between eyes
     
     const dy = center.y - noseTop.y;
-    const size = Math.abs(dy * ctx.canvas.height) * 0.4;
+    const size = Math.abs(dy * h) * 0.4;
 
     ctx.save();
     ctx.fillStyle = color;
@@ -337,7 +353,7 @@ const drawBindi = (ctx: CanvasRenderingContext2D, landmarks: any[], color: strin
     ctx.shadowBlur = 2;
     ctx.filter = 'blur(0.5px)'; // Slight softness to edge
     ctx.beginPath();
-    ctx.arc(center.x * ctx.canvas.width, (center.y * ctx.canvas.height) - (size), size, 0, 2 * Math.PI);
+    ctx.arc(center.x * w, (center.y * h) - (size), size, 0, 2 * Math.PI);
     ctx.fill();
     ctx.restore();
 }
@@ -350,6 +366,9 @@ const drawNoseRing = (
 ) => {
   if (opacity <= 0.01 || !img) return;
 
+  const w = ctx.canvas.width;
+  const h = ctx.canvas.height;
+
   const nosePoint = landmarks[LANDMARK_NOSE_LEFT];
   const leftFace = landmarks[234];
   const rightFace = landmarks[454];
@@ -358,9 +377,9 @@ const drawNoseRing = (
   const faceWidth = Math.sqrt(Math.pow(rightFace.x - leftFace.x, 2) + Math.pow(rightFace.y - leftFace.y, 2));
 
   // Scale factor
-  const size = faceWidth * ctx.canvas.width * 0.12;
-  const x = nosePoint.x * ctx.canvas.width - size / 2;
-  const y = nosePoint.y * ctx.canvas.height - size / 2;
+  const size = faceWidth * w * 0.12;
+  const x = nosePoint.x * w - size / 2;
+  const y = nosePoint.y * h - size / 2;
 
   ctx.save();
   ctx.globalAlpha = opacity;
@@ -376,19 +395,22 @@ const drawEarrings = (
 ) => {
   if (opacity <= 0.01 || !img) return;
 
+  const w = ctx.canvas.width;
+  const h = ctx.canvas.height;
+
   const leftFace = landmarks[234];
   const rightFace = landmarks[454];
   if (!leftFace || !rightFace) return;
 
   const faceWidth = Math.sqrt(Math.pow(rightFace.x - leftFace.x, 2) + Math.pow(rightFace.y - leftFace.y, 2));
-  const size = faceWidth * ctx.canvas.width * 0.15;
+  const size = faceWidth * w * 0.15;
 
   // Left Ear Area
   const pLeft = landmarks[LANDMARK_EAR_LEFT];
   if (pLeft) {
        // Offset slightly outwards relative to face center
-       const xLeft = pLeft.x * ctx.canvas.width - size/2 - (faceWidth * ctx.canvas.width * 0.05);
-       const yLeft = pLeft.y * ctx.canvas.height;
+       const xLeft = pLeft.x * w - size/2 - (faceWidth * w * 0.05);
+       const yLeft = pLeft.y * h;
        ctx.save();
        ctx.globalAlpha = opacity;
        ctx.drawImage(img, xLeft, yLeft, size, size);
@@ -398,8 +420,8 @@ const drawEarrings = (
   // Right Ear Area
   const pRight = landmarks[LANDMARK_EAR_RIGHT];
   if (pRight) {
-       const xRight = pRight.x * ctx.canvas.width - size/2 + (faceWidth * ctx.canvas.width * 0.05);
-       const yRight = pRight.y * ctx.canvas.height;
+       const xRight = pRight.x * w - size/2 + (faceWidth * w * 0.05);
+       const yRight = pRight.y * h;
        ctx.save();
        ctx.globalAlpha = opacity;
        ctx.drawImage(img, xRight, yRight, size, size);
@@ -489,7 +511,6 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
       const sliderVal = sliderPosRef.current;
 
       ctx.save();
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
       
       // Draw background from video frame
       ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
