@@ -9,3 +9,7 @@
 ## 2026-02-03 - Hoisting DOM Access to Render Loop Scope
 **Learning:** Hoisting `canvas.width` and `canvas.height` at the start of the `onResults` loop and passing them as arguments to stateless helper functions is more efficient than accessing them inside each helper. This avoids 10-20 repeated DOM property lookups per frame.
 **Action:** When refactoring render loops, push context-dependent variables (like dimensions) up the call stack to the loop entry point.
+
+## 2026-02-04 - Consolidating Canvas State Changes
+**Learning:** In complex multi-pass canvas drawings (like lips with 3 layers), using a single `save/restore` block and manually managing state changes (like `globalCompositeOperation`) is more efficient than wrapping each pass in its own `save/restore` block.
+**Action:** When implementing multi-layer canvas effects, group them under a single state stack frame if possible.

@@ -55,16 +55,16 @@ const drawShape = (
 
   ctx.save();
   ctx.globalCompositeOperation = composite;
+  // Bolt: Hoisted invariant properties
+  ctx.globalAlpha = opacity * 0.5;
+  ctx.fillStyle = color;
 
   // Layer 1: Wide diffuse smudge (soft edge)
   ctx.filter = `blur(${baseBlur}px)`;
-  ctx.globalAlpha = opacity * 0.5;
-  ctx.fillStyle = color;
   ctx.fill();
 
   // Layer 2: Inner definition (slightly more focused color)
   ctx.filter = `blur(${baseBlur * 0.5}px)`;
-  ctx.globalAlpha = opacity * 0.5;
   ctx.fill();
 
   ctx.restore();
@@ -102,31 +102,28 @@ const drawLips = (
   }
   ctx.closePath();
 
-  // Pass 1: Soft Light (Texture preservation, faint)
+  // Bolt: Consolidated save/restore to reduce Canvas API overhead
   ctx.save();
-  ctx.globalAlpha = opacity;
   ctx.fillStyle = color;
+
+  // Pass 1: Soft Light (Texture preservation, faint)
+  ctx.globalAlpha = opacity;
   ctx.globalCompositeOperation = 'soft-light';
   ctx.filter = 'blur(4px)';
   ctx.fill('evenodd');
-  ctx.restore();
 
   // Pass 2: Color Bleed (Smudged edge)
-  ctx.save();
   ctx.globalAlpha = opacity * 0.6;
-  ctx.fillStyle = color;
   ctx.globalCompositeOperation = 'source-over';
   ctx.filter = 'blur(6px)';
   ctx.fill('evenodd');
-  ctx.restore();
 
   // Pass 3: Core Color (Definition)
-  ctx.save();
   ctx.globalAlpha = opacity * 0.4;
-  ctx.fillStyle = color;
-  ctx.globalCompositeOperation = 'source-over';
+  // Composite is already 'source-over'
   ctx.filter = 'blur(2px)';
   ctx.fill('evenodd');
+
   ctx.restore();
 };
 
