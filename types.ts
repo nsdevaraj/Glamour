@@ -43,11 +43,3 @@ export enum MakeupCategory {
   HAIR = 'HAIR',
   ACCESSORIES = 'EXTRAS'
 }
-
-// Global types for MediaPipe libraries loaded via script tags
-declare global {
-  interface Window {
-    FaceMesh: any;
-    Camera: any;
-  }
-}
