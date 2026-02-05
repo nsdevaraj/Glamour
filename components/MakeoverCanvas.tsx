@@ -16,6 +16,8 @@ import {
   LANDMARK_EAR_RIGHT
 } from '../constants';
 import { NOSE_RING_B64, EARRING_B64 } from './assets';
+import { FaceMesh } from '@mediapipe/face_mesh';
+import { Camera } from '@mediapipe/camera_utils';
 
 interface MakeoverCanvasProps {
   config: MakeupConfig;
@@ -570,15 +572,9 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
     const init = async () => {
         if (!isMountedRef.current) return;
 
-        // Ensure global scripts are loaded
-        if (!window.FaceMesh || !window.Camera) {
-             setTimeout(init, 500);
-             return;
-        }
-
         try {
-            faceMesh = new window.FaceMesh({locateFile: (file: string) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+            faceMesh = new FaceMesh({locateFile: (file: string) => {
+                return `/models/face_mesh/${file}`;
             }});
             
             faceMesh.setOptions({
@@ -591,7 +587,7 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
             faceMesh.onResults(onResults);
             
             if (videoRef.current) {
-                camera = new window.Camera(videoRef.current, {
+                camera = new Camera(videoRef.current, {
                     onFrame: async () => {
                         if (videoRef.current) {
                             await faceMesh.send({image: videoRef.current});
