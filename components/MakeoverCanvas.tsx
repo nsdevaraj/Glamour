@@ -31,12 +31,12 @@ const HAIRLINE_INDICES = [
 
 // --- Drawing Helpers (Moved outside component to avoid re-creation & optimize GC) ---
 
-const drawShape = (
+const drawShapes = (
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
   landmarks: any[],
-  indices: number[],
+  shapesIndices: number[][],
   color: string,
   opacity: number,
   baseBlur: number = 10,
@@ -45,13 +45,16 @@ const drawShape = (
   if (opacity <= 0.01) return;
 
   ctx.beginPath();
-  const firstPoint = landmarks[indices[0]];
-  ctx.moveTo(firstPoint.x * w, firstPoint.y * h);
-  for (let i = 1; i < indices.length; i++) {
-    const p = landmarks[indices[i]];
-    ctx.lineTo(p.x * w, p.y * h);
+  for (const indices of shapesIndices) {
+      if (indices.length === 0) continue;
+      const firstPoint = landmarks[indices[0]];
+      ctx.moveTo(firstPoint.x * w, firstPoint.y * h);
+      for (let i = 1; i < indices.length; i++) {
+        const p = landmarks[indices[i]];
+        ctx.lineTo(p.x * w, p.y * h);
+      }
+      ctx.closePath();
   }
-  ctx.closePath();
 
   ctx.save();
   ctx.globalCompositeOperation = composite;
@@ -223,12 +226,12 @@ const drawHair = (
   ctx.restore();
 };
 
-const drawStroke = (
+const drawStrokes = (
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
   landmarks: any[],
-  indices: number[],
+  shapesIndices: number[][],
   color: string,
   opacity: number,
   width: number = 2
@@ -244,72 +247,82 @@ const drawStroke = (
   ctx.filter = 'blur(2px)';
 
   ctx.beginPath();
-  const firstPoint = landmarks[indices[0]];
-  ctx.moveTo(firstPoint.x * w, firstPoint.y * h);
+  for (const indices of shapesIndices) {
+      if (indices.length === 0) continue;
+      const firstPoint = landmarks[indices[0]];
+      ctx.moveTo(firstPoint.x * w, firstPoint.y * h);
 
-  for (let i = 1; i < indices.length; i++) {
-    const point = landmarks[indices[i]];
-    ctx.lineTo(point.x * w, point.y * h);
+      for (let i = 1; i < indices.length; i++) {
+        const point = landmarks[indices[i]];
+        ctx.lineTo(point.x * w, point.y * h);
+      }
   }
   ctx.stroke();
   ctx.restore();
 };
 
 // Optimization: Avoid allocation of 'pts' array and sorting
-const drawBlush = (
+const drawBlushes = (
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
   landmarks: any[],
-  indices: number[],
+  shapesIndices: number[][],
   color: string,
   opacity: number
 ) => {
   if (opacity <= 0.01) return;
 
-  let sumX = 0, sumY = 0;
-  let minX = Infinity, maxX = -Infinity;
-  let minY = Infinity, maxY = -Infinity;
+  // Pre-calculate all ellipse parameters
+  const ellipses = [];
 
-  let pLeftX = 0, pLeftY = 0;
-  let pRightX = 0, pRightY = 0;
+  for (const indices of shapesIndices) {
+      if (indices.length === 0) continue;
 
-  const len = indices.length;
+      let sumX = 0, sumY = 0;
+      let minX = Infinity, maxX = -Infinity;
+      let minY = Infinity, maxY = -Infinity;
+      let pLeftX = 0, pLeftY = 0;
+      let pRightX = 0, pRightY = 0;
 
-  if (len === 0) return;
+      const len = indices.length;
 
-  for (const i of indices) {
-    const p = landmarks[i];
-    const x = p.x * w;
-    const y = p.y * h;
+      for (const i of indices) {
+        const p = landmarks[i];
+        const x = p.x * w;
+        const y = p.y * h;
 
-    sumX += x;
-    sumY += y;
-    
-    if (x < minX) {
-        minX = x;
-        pLeftX = x;
-        pLeftY = y;
-    }
-    if (x > maxX) {
-        maxX = x;
-        pRightX = x;
-        pRightY = y;
-    }
+        sumX += x;
+        sumY += y;
 
-    if (y < minY) minY = y;
-    if (y > maxY) maxY = y;
+        if (x < minX) {
+            minX = x;
+            pLeftX = x;
+            pLeftY = y;
+        }
+        if (x > maxX) {
+            maxX = x;
+            pRightX = x;
+            pRightY = y;
+        }
+
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+
+      const centerX = sumX / len;
+      const centerY = sumY / len;
+
+      const dx = pRightX - pLeftX;
+      const dy = pRightY - pLeftY;
+      const rotation = Math.atan2(dy, dx);
+      const length = Math.sqrt(dx*dx + dy*dy);
+      const height = maxY - minY;
+
+      ellipses.push({ centerX, centerY, length, height, rotation });
   }
 
-  const centerX = sumX / len;
-  const centerY = sumY / len;
-
-  // Estimate Orientation
-  const dx = pRightX - pLeftX;
-  const dy = pRightY - pLeftY;
-  const rotation = Math.atan2(dy, dx);
-  const length = Math.sqrt(dx*dx + dy*dy);
-  const height = maxY - minY;
+  if (ellipses.length === 0) return;
 
   ctx.save();
   ctx.fillStyle = color;
@@ -319,14 +332,21 @@ const drawBlush = (
   ctx.globalAlpha = opacity * 0.4;
   ctx.filter = 'blur(25px)';
   ctx.beginPath();
-  ctx.ellipse(centerX, centerY, length * 0.6, height * 0.7, rotation, 0, 2 * Math.PI);
+  for (const e of ellipses) {
+    // Bolt: Use moveTo to start new subpath correctly, although ellipse() does it too but this is safer for some browsers
+    ctx.moveTo(e.centerX + e.length * 0.6 * Math.cos(e.rotation), e.centerY + e.length * 0.6 * Math.sin(e.rotation));
+    ctx.ellipse(e.centerX, e.centerY, e.length * 0.6, e.height * 0.7, e.rotation, 0, 2 * Math.PI);
+  }
   ctx.fill();
 
   // Pass 2: Slightly more focused center
   ctx.globalAlpha = opacity * 0.6;
   ctx.filter = 'blur(15px)';
   ctx.beginPath();
-  ctx.ellipse(centerX, centerY, length * 0.4, height * 0.5, rotation, 0, 2 * Math.PI);
+  for (const e of ellipses) {
+    ctx.moveTo(e.centerX + e.length * 0.4 * Math.cos(e.rotation), e.centerY + e.length * 0.4 * Math.sin(e.rotation));
+    ctx.ellipse(e.centerX, e.centerY, e.length * 0.4, e.height * 0.5, e.rotation, 0, 2 * Math.PI);
+  }
   ctx.fill();
 
   ctx.restore();
@@ -521,21 +541,18 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
       for (const landmarks of results.multiFaceLandmarks) {
         // 1. Foundation (High blur, subtle)
         if (currentConfig.enableFace) {
-            drawShape(ctx, w, h, landmarks, FACEMESH_FACE_OVAL, currentConfig.foundationTone, currentConfig.foundationOpacity, 30, 'multiply');
+            drawShapes(ctx, w, h, landmarks, [FACEMESH_FACE_OVAL], currentConfig.foundationTone, currentConfig.foundationOpacity, 30, 'multiply');
             
-            drawBlush(ctx, w, h, landmarks, FACEMESH_LEFT_CHEEK, currentConfig.blushColor, currentConfig.blushOpacity);
-            drawBlush(ctx, w, h, landmarks, FACEMESH_RIGHT_CHEEK, currentConfig.blushColor, currentConfig.blushOpacity);
+            drawBlushes(ctx, w, h, landmarks, [FACEMESH_LEFT_CHEEK, FACEMESH_RIGHT_CHEEK], currentConfig.blushColor, currentConfig.blushOpacity);
         }
 
         // 2. Eyes (Smudged edges)
         if (currentConfig.enableEyes) {
             // Eyeshadow - soft cloud
-            drawShape(ctx, w, h, landmarks, FACEMESH_LEFT_EYESHADOW, currentConfig.eyeshadowColor, currentConfig.eyeshadowOpacity, 12, 'multiply');
-            drawShape(ctx, w, h, landmarks, FACEMESH_RIGHT_EYESHADOW, currentConfig.eyeshadowColor, currentConfig.eyeshadowOpacity, 12, 'multiply');
+            drawShapes(ctx, w, h, landmarks, [FACEMESH_LEFT_EYESHADOW, FACEMESH_RIGHT_EYESHADOW], currentConfig.eyeshadowColor, currentConfig.eyeshadowOpacity, 12, 'multiply');
             
             // Eyeliner - defined but not crisp
-            drawStroke(ctx, w, h, landmarks, FACEMESH_LEFT_EYE_OUTLINE, currentConfig.eyelinerColor, currentConfig.eyelinerOpacity, 2.5);
-            drawStroke(ctx, w, h, landmarks, FACEMESH_RIGHT_EYE_OUTLINE, currentConfig.eyelinerColor, currentConfig.eyelinerOpacity, 2.5);
+            drawStrokes(ctx, w, h, landmarks, [FACEMESH_LEFT_EYE_OUTLINE, FACEMESH_RIGHT_EYE_OUTLINE], currentConfig.eyelinerColor, currentConfig.eyelinerOpacity, 2.5);
         }
         
         // 3. Lips & Teeth
