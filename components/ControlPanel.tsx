@@ -17,7 +17,7 @@ const PRESET_COLORS = [
   '#000000', '#FFFFFF'
 ];
 
-const ControlPanel: React.FC<ControlPanelProps> = ({
+const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   config,
   updateConfig,
   activeCategory,
@@ -261,6 +261,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export default ControlPanel;
