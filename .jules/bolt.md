@@ -13,3 +13,7 @@
 ## 2026-02-04 - Consolidating Canvas State Changes
 **Learning:** In complex multi-pass canvas drawings (like lips with 3 layers), using a single `save/restore` block and manually managing state changes (like `globalCompositeOperation`) is more efficient than wrapping each pass in its own `save/restore` block.
 **Action:** When implementing multi-layer canvas effects, group them under a single state stack frame if possible.
+
+## 2026-02-04 - Batching Symmetric Canvas Operations
+**Learning:** Drawing symmetrical features (left/right eye, cheeks) individually doubles the overhead of `ctx.save()`, `ctx.restore()`, and especially expensive `ctx.filter` assignments.
+**Action:** Refactor drawing helpers to accept arrays of shapes (`indices[][]`) and batch them into a single path (using `moveTo` for separation) before a single fill/stroke operation.
