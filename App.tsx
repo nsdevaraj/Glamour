@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import MakeoverCanvas from './components/MakeoverCanvas';
 import ControlPanel from './components/ControlPanel';
 import { MakeupConfig, MakeupCategory } from './types';
@@ -8,12 +8,12 @@ const App: React.FC = () => {
   const [makeupConfig, setMakeupConfig] = useState<MakeupConfig>(DEFAULT_MAKEUP_CONFIG);
   const [activeCategory, setActiveCategory] = useState<MakeupCategory>(MakeupCategory.LIPS);
 
-  const handleConfigUpdate = (key: keyof MakeupConfig, value: string | number | boolean) => {
+  const handleConfigUpdate = useCallback((key: keyof MakeupConfig, value: string | number | boolean) => {
     setMakeupConfig(prev => ({
       ...prev,
       [key]: value
     }));
-  };
+  }, []);
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden font-sans">

@@ -419,7 +419,7 @@ const drawEarrings = (
   }
 };
 
-const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
+const MakeoverCanvas: React.FC<MakeoverCanvasProps> = React.memo(({ config }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [modelLoaded, setModelLoaded] = useState(false);
@@ -690,6 +690,6 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = ({ config }) => {
        )}
     </div>
   );
-};
+});
 
 export default MakeoverCanvas;
