@@ -261,7 +261,8 @@ const drawStrokes = (
   ctx.restore();
 };
 
-// Optimization: Avoid allocation of 'pts' array and sorting
+// Optimization: Avoid allocation of 'pts' array and sorting.
+// Bolt: Replaced 'ctx.filter' (expensive blur) with 'ctx.createRadialGradient' (fast vector-based approximation)
 const drawBlushes = (
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -273,8 +274,8 @@ const drawBlushes = (
 ) => {
   if (opacity <= 0.01) return;
 
-  // Pre-calculate all ellipse parameters
-  const ellipses = [];
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
 
   for (const indices of shapesIndices) {
       if (indices.length === 0) continue;
@@ -289,6 +290,8 @@ const drawBlushes = (
 
       for (const i of indices) {
         const p = landmarks[i];
+        // Optimization: Defer multiplication by w/h to outside loop if possible,
+        // but min/max logic needs pixel coords for accurate bbox orientation if aspect ratio isn't 1:1.
         const x = p.x * w;
         const y = p.y * h;
 
@@ -319,35 +322,37 @@ const drawBlushes = (
       const length = Math.sqrt(dx*dx + dy*dy);
       const height = maxY - minY;
 
-      ellipses.push({ centerX, centerY, length, height, rotation });
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.rotate(rotation);
+      ctx.scale(1, height / length); // Squash circle into ellipse
+
+      // Pass 1: Wide dispersion (replaces blur(25px))
+      const r1 = length * 0.9;
+      const grad1 = ctx.createRadialGradient(0, 0, 0, 0, 0, r1);
+      grad1.addColorStop(0, color);
+      grad1.addColorStop(1, 'rgba(255,255,255,0)'); // Transparent
+
+      ctx.globalAlpha = opacity * 0.4;
+      ctx.fillStyle = grad1;
+      ctx.beginPath();
+      ctx.arc(0, 0, r1, 0, 2 * Math.PI);
+      ctx.fill();
+
+      // Pass 2: Slightly more focused center (replaces blur(15px))
+      const r2 = length * 0.5;
+      const grad2 = ctx.createRadialGradient(0, 0, 0, 0, 0, r2);
+      grad2.addColorStop(0, color);
+      grad2.addColorStop(1, 'rgba(255,255,255,0)'); // Transparent
+
+      ctx.globalAlpha = opacity * 0.6;
+      ctx.fillStyle = grad2;
+      ctx.beginPath();
+      ctx.arc(0, 0, r2, 0, 2 * Math.PI);
+      ctx.fill();
+
+      ctx.restore();
   }
-
-  if (ellipses.length === 0) return;
-
-  ctx.save();
-  ctx.fillStyle = color;
-  ctx.globalCompositeOperation = 'multiply';
-
-  // Pass 1: Very wide dispersion
-  ctx.globalAlpha = opacity * 0.4;
-  ctx.filter = 'blur(25px)';
-  ctx.beginPath();
-  for (const e of ellipses) {
-    // Bolt: Use moveTo to start new subpath correctly, although ellipse() does it too but this is safer for some browsers
-    ctx.moveTo(e.centerX + e.length * 0.6 * Math.cos(e.rotation), e.centerY + e.length * 0.6 * Math.sin(e.rotation));
-    ctx.ellipse(e.centerX, e.centerY, e.length * 0.6, e.height * 0.7, e.rotation, 0, 2 * Math.PI);
-  }
-  ctx.fill();
-
-  // Pass 2: Slightly more focused center
-  ctx.globalAlpha = opacity * 0.6;
-  ctx.filter = 'blur(15px)';
-  ctx.beginPath();
-  for (const e of ellipses) {
-    ctx.moveTo(e.centerX + e.length * 0.4 * Math.cos(e.rotation), e.centerY + e.length * 0.4 * Math.sin(e.rotation));
-    ctx.ellipse(e.centerX, e.centerY, e.length * 0.4, e.height * 0.5, e.rotation, 0, 2 * Math.PI);
-  }
-  ctx.fill();
 
   ctx.restore();
 };
