@@ -31,6 +31,14 @@ const HAIRLINE_INDICES = [
 
 // --- Drawing Helpers (Moved outside component to avoid re-creation & optimize GC) ---
 
+// Helper to convert hex to rgba string
+const hexToRgba = (hex: string, alpha: number) => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
 const drawShapes = (
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -325,29 +333,63 @@ const drawBlushes = (
   if (ellipses.length === 0) return;
 
   ctx.save();
-  ctx.fillStyle = color;
   ctx.globalCompositeOperation = 'multiply';
 
-  // Pass 1: Very wide dispersion
-  ctx.globalAlpha = opacity * 0.4;
-  ctx.filter = 'blur(25px)';
-  ctx.beginPath();
   for (const e of ellipses) {
-    // Bolt: Use moveTo to start new subpath correctly, although ellipse() does it too but this is safer for some browsers
-    ctx.moveTo(e.centerX + e.length * 0.6 * Math.cos(e.rotation), e.centerY + e.length * 0.6 * Math.sin(e.rotation));
-    ctx.ellipse(e.centerX, e.centerY, e.length * 0.6, e.height * 0.7, e.rotation, 0, 2 * Math.PI);
-  }
-  ctx.fill();
+    // Bolt Optimization: Use RadialGradient instead of expensive ctx.filter='blur()'
 
-  // Pass 2: Slightly more focused center
-  ctx.globalAlpha = opacity * 0.6;
-  ctx.filter = 'blur(15px)';
-  ctx.beginPath();
-  for (const e of ellipses) {
-    ctx.moveTo(e.centerX + e.length * 0.4 * Math.cos(e.rotation), e.centerY + e.length * 0.4 * Math.sin(e.rotation));
-    ctx.ellipse(e.centerX, e.centerY, e.length * 0.4, e.height * 0.5, e.rotation, 0, 2 * Math.PI);
+    // Pass 1: Wide dispersion
+    // Original: ellipse(rx, ry) with blur(25px)
+    const rx1 = e.length * 0.6;
+    const ry1 = e.height * 0.7;
+    const blur1 = 25;
+    const totalR1 = rx1 + blur1;
+
+    ctx.save();
+    ctx.translate(e.centerX, e.centerY);
+    ctx.rotate(e.rotation);
+    ctx.scale(1, ry1 / rx1); // Scale Y to match aspect ratio
+
+    const grad1 = ctx.createRadialGradient(0, 0, 0, 0, 0, totalR1);
+    const color1 = hexToRgba(color, opacity * 0.4);
+    const colorTransparent = hexToRgba(color, 0);
+
+    grad1.addColorStop(0, color1);
+    // Solid core approximation
+    grad1.addColorStop(Math.max(0, rx1 / totalR1), color1);
+    grad1.addColorStop(1, colorTransparent);
+
+    ctx.fillStyle = grad1;
+    ctx.beginPath();
+    ctx.arc(0, 0, totalR1, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.restore();
+
+    // Pass 2: Slightly more focused center
+    // Original: ellipse(rx, ry) with blur(15px)
+    const rx2 = e.length * 0.4;
+    const ry2 = e.height * 0.5;
+    const blur2 = 15;
+    const totalR2 = rx2 + blur2;
+
+    ctx.save();
+    ctx.translate(e.centerX, e.centerY);
+    ctx.rotate(e.rotation);
+    ctx.scale(1, ry2 / rx2);
+
+    const grad2 = ctx.createRadialGradient(0, 0, 0, 0, 0, totalR2);
+    const color2 = hexToRgba(color, opacity * 0.6);
+
+    grad2.addColorStop(0, color2);
+    grad2.addColorStop(Math.max(0, rx2 / totalR2), color2);
+    grad2.addColorStop(1, colorTransparent);
+
+    ctx.fillStyle = grad2;
+    ctx.beginPath();
+    ctx.arc(0, 0, totalR2, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.restore();
   }
-  ctx.fill();
 
   ctx.restore();
 };
