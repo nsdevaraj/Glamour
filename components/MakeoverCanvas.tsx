@@ -31,6 +31,13 @@ const HAIRLINE_INDICES = [
 
 // --- Drawing Helpers (Moved outside component to avoid re-creation & optimize GC) ---
 
+const hexToRgb = (hex: string): string => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `${r}, ${g}, ${b}`;
+};
+
 const drawShapes = (
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -325,30 +332,59 @@ const drawBlushes = (
   if (ellipses.length === 0) return;
 
   ctx.save();
-  ctx.fillStyle = color;
   ctx.globalCompositeOperation = 'multiply';
+  // Optimization: Pre-calculate RGB string once
+  const rgb = hexToRgb(color);
 
-  // Pass 1: Very wide dispersion
-  ctx.globalAlpha = opacity * 0.4;
-  ctx.filter = 'blur(25px)';
-  ctx.beginPath();
   for (const e of ellipses) {
-    // Bolt: Use moveTo to start new subpath correctly, although ellipse() does it too but this is safer for some browsers
-    ctx.moveTo(e.centerX + e.length * 0.6 * Math.cos(e.rotation), e.centerY + e.length * 0.6 * Math.sin(e.rotation));
-    ctx.ellipse(e.centerX, e.centerY, e.length * 0.6, e.height * 0.7, e.rotation, 0, 2 * Math.PI);
-  }
-  ctx.fill();
+      ctx.save();
+      ctx.translate(e.centerX, e.centerY);
+      ctx.rotate(e.rotation);
 
-  // Pass 2: Slightly more focused center
-  ctx.globalAlpha = opacity * 0.6;
-  ctx.filter = 'blur(15px)';
-  ctx.beginPath();
-  for (const e of ellipses) {
-    ctx.moveTo(e.centerX + e.length * 0.4 * Math.cos(e.rotation), e.centerY + e.length * 0.4 * Math.sin(e.rotation));
-    ctx.ellipse(e.centerX, e.centerY, e.length * 0.4, e.height * 0.5, e.rotation, 0, 2 * Math.PI);
-  }
-  ctx.fill();
+      // Pass 1: Wide dispersion
+      ctx.save();
+      const rx1 = e.length * 0.6;
+      const ry1 = e.height * 0.7;
+      const scaleY1 = ry1 / rx1;
 
+      if (isFinite(scaleY1)) {
+        ctx.scale(1, scaleY1);
+        // Bolt: Replaced expensive filter='blur(25px)' with RadialGradient
+        const radius1 = rx1 + 25;
+        const g1 = ctx.createRadialGradient(0, 0, 0, 0, 0, radius1);
+        g1.addColorStop(0, `rgba(${rgb}, ${opacity * 0.4})`);
+        g1.addColorStop(1, `rgba(${rgb}, 0)`);
+
+        ctx.fillStyle = g1;
+        ctx.beginPath();
+        ctx.arc(0, 0, radius1, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // Pass 2: Focused center
+      ctx.save();
+      const rx2 = e.length * 0.4;
+      const ry2 = e.height * 0.5;
+      const scaleY2 = ry2 / rx2;
+
+      if (isFinite(scaleY2)) {
+        ctx.scale(1, scaleY2);
+        // Bolt: Replaced expensive filter='blur(15px)' with RadialGradient
+        const radius2 = rx2 + 15;
+        const g2 = ctx.createRadialGradient(0, 0, 0, 0, 0, radius2);
+        g2.addColorStop(0, `rgba(${rgb}, ${opacity * 0.6})`);
+        g2.addColorStop(1, `rgba(${rgb}, 0)`);
+
+        ctx.fillStyle = g2;
+        ctx.beginPath();
+        ctx.arc(0, 0, radius2, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      ctx.restore();
+  }
   ctx.restore();
 };
 
