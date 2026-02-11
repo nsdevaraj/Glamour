@@ -31,6 +31,11 @@ const HAIRLINE_INDICES = [
 
 // --- Drawing Helpers (Moved outside component to avoid re-creation & optimize GC) ---
 
+const hexToRgb = (hex: string): string => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '255, 0, 0';
+}
+
 const drawShapes = (
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -261,7 +266,7 @@ const drawStrokes = (
   ctx.restore();
 };
 
-// Optimization: Avoid allocation of 'pts' array and sorting
+// Optimization: Avoid allocation of 'pts' array and sorting. Use gradients instead of expensive blur.
 const drawBlushes = (
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -273,8 +278,10 @@ const drawBlushes = (
 ) => {
   if (opacity <= 0.01) return;
 
-  // Pre-calculate all ellipse parameters
-  const ellipses = [];
+  const rgb = hexToRgb(color);
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
 
   for (const indices of shapesIndices) {
       if (indices.length === 0) continue;
@@ -319,35 +326,54 @@ const drawBlushes = (
       const length = Math.sqrt(dx*dx + dy*dy);
       const height = maxY - minY;
 
-      ellipses.push({ centerX, centerY, length, height, rotation });
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.rotate(rotation);
+
+      // Pass 1: Wide dispersion
+      {
+          const rx = length * 0.6;
+          const ry = height * 0.7;
+          const blur = 25;
+          const radius = Math.max(rx, ry) + blur * 2;
+          const scaleY = ry / rx;
+
+          ctx.save();
+          ctx.scale(1, scaleY);
+          const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
+          gradient.addColorStop(0, `rgba(${rgb}, ${opacity * 0.4})`);
+          gradient.addColorStop(1, `rgba(${rgb}, 0)`);
+
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(0, 0, radius, 0, 2 * Math.PI);
+          ctx.fill();
+          ctx.restore();
+      }
+
+      // Pass 2: More focused center
+      {
+          const rx = length * 0.4;
+          const ry = height * 0.5;
+          const blur = 15;
+          const radius = Math.max(rx, ry) + blur * 2;
+          const scaleY = ry / rx;
+
+          ctx.save();
+          ctx.scale(1, scaleY);
+          const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
+          gradient.addColorStop(0, `rgba(${rgb}, ${opacity * 0.6})`);
+          gradient.addColorStop(1, `rgba(${rgb}, 0)`);
+
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(0, 0, radius, 0, 2 * Math.PI);
+          ctx.fill();
+          ctx.restore();
+      }
+
+      ctx.restore();
   }
-
-  if (ellipses.length === 0) return;
-
-  ctx.save();
-  ctx.fillStyle = color;
-  ctx.globalCompositeOperation = 'multiply';
-
-  // Pass 1: Very wide dispersion
-  ctx.globalAlpha = opacity * 0.4;
-  ctx.filter = 'blur(25px)';
-  ctx.beginPath();
-  for (const e of ellipses) {
-    // Bolt: Use moveTo to start new subpath correctly, although ellipse() does it too but this is safer for some browsers
-    ctx.moveTo(e.centerX + e.length * 0.6 * Math.cos(e.rotation), e.centerY + e.length * 0.6 * Math.sin(e.rotation));
-    ctx.ellipse(e.centerX, e.centerY, e.length * 0.6, e.height * 0.7, e.rotation, 0, 2 * Math.PI);
-  }
-  ctx.fill();
-
-  // Pass 2: Slightly more focused center
-  ctx.globalAlpha = opacity * 0.6;
-  ctx.filter = 'blur(15px)';
-  ctx.beginPath();
-  for (const e of ellipses) {
-    ctx.moveTo(e.centerX + e.length * 0.4 * Math.cos(e.rotation), e.centerY + e.length * 0.4 * Math.sin(e.rotation));
-    ctx.ellipse(e.centerX, e.centerY, e.length * 0.4, e.height * 0.5, e.rotation, 0, 2 * Math.PI);
-  }
-  ctx.fill();
 
   ctx.restore();
 };
