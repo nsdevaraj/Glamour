@@ -17,3 +17,7 @@
 ## 2026-02-04 - Batching Symmetric Canvas Operations
 **Learning:** Drawing symmetrical features (left/right eye, cheeks) individually doubles the overhead of `ctx.save()`, `ctx.restore()`, and especially expensive `ctx.filter` assignments.
 **Action:** Refactor drawing helpers to accept arrays of shapes (`indices[][]`) and batch them into a single path (using `moveTo` for separation) before a single fill/stroke operation.
+
+## 2026-02-04 - Blur Filter vs Radial Gradients
+**Learning:** `ctx.filter = 'blur(...)'` invokes a convolution kernel that scales poorly with resolution and kernel size in high-frequency loops (60fps).
+**Action:** Replace soft circular blurs (like blush) with `ctx.createRadialGradient` and alpha interpolation. It achieves a similar visual result with O(1) fragment shader complexity per pixel.
