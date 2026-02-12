@@ -33,6 +33,14 @@ const HAIRLINE_INDICES = [
 // --- Drawing Helpers (Moved outside component to avoid re-creation & optimize GC) ---
 
 const hexToRgb = (hex: string): string => {
+  // Optimization: Direct slice for standard #RRGGBB format avoids regex overhead
+  if (hex.length === 7 && hex[0] === '#') {
+     const r = parseInt(hex.slice(1, 3), 16);
+     const g = parseInt(hex.slice(3, 5), 16);
+     const b = parseInt(hex.slice(5, 7), 16);
+     return `${r}, ${g}, ${b}`;
+  }
+
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '255, 0, 0';
 }
@@ -274,13 +282,10 @@ const drawBlushes = (
   h: number,
   landmarks: any[],
   shapesIndices: number[][],
-  color: string,
-  opacity: number
+  colorPass1: string,
+  colorPass2: string,
+  transparentColor: string
 ) => {
-  if (opacity <= 0.01) return;
-
-  const rgb = hexToRgb(color);
-
   ctx.save();
   ctx.globalCompositeOperation = 'multiply';
 
@@ -342,8 +347,8 @@ const drawBlushes = (
           ctx.save();
           ctx.scale(1, scaleY);
           const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
-          gradient.addColorStop(0, `rgba(${rgb}, ${opacity * 0.4})`);
-          gradient.addColorStop(1, `rgba(${rgb}, 0)`);
+          gradient.addColorStop(0, colorPass1);
+          gradient.addColorStop(1, transparentColor);
 
           ctx.fillStyle = gradient;
           ctx.beginPath();
@@ -363,8 +368,8 @@ const drawBlushes = (
           ctx.save();
           ctx.scale(1, scaleY);
           const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
-          gradient.addColorStop(0, `rgba(${rgb}, ${opacity * 0.6})`);
-          gradient.addColorStop(1, `rgba(${rgb}, 0)`);
+          gradient.addColorStop(0, colorPass2);
+          gradient.addColorStop(1, transparentColor);
 
           ctx.fillStyle = gradient;
           ctx.beginPath();
@@ -487,10 +492,20 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = React.memo(({ config }) =>
   const isCompareModeRef = useRef(isCompareMode);
   const isMountedRef = useRef(true);
 
+  // Optimization: Store pre-computed blush colors to avoid string concatenation in render loop
+  const blushColorStopsRef = useRef({ pass1: '', pass2: '', transparent: '' });
+
   useEffect(() => {
     configRef.current = config;
     sliderPosRef.current = sliderPos;
     isCompareModeRef.current = isCompareMode;
+
+    const rgb = hexToRgb(config.blushColor);
+    blushColorStopsRef.current = {
+      pass1: `rgba(${rgb}, ${config.blushOpacity * 0.4})`,
+      pass2: `rgba(${rgb}, ${config.blushOpacity * 0.6})`,
+      transparent: `rgba(${rgb}, 0)`
+    };
   }, [config, sliderPos, isCompareMode]);
 
   useEffect(() => {
@@ -570,7 +585,10 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = React.memo(({ config }) =>
         if (currentConfig.enableFace) {
             drawShapes(ctx, w, h, landmarks, [FACEMESH_FACE_OVAL], currentConfig.foundationTone, currentConfig.foundationOpacity, 30, 'multiply');
             
-            drawBlushes(ctx, w, h, landmarks, [FACEMESH_LEFT_CHEEK, FACEMESH_RIGHT_CHEEK], currentConfig.blushColor, currentConfig.blushOpacity);
+            if (currentConfig.blushOpacity > 0.01) {
+                const { pass1, pass2, transparent } = blushColorStopsRef.current;
+                drawBlushes(ctx, w, h, landmarks, [FACEMESH_LEFT_CHEEK, FACEMESH_RIGHT_CHEEK], pass1, pass2, transparent);
+            }
         }
 
         // 2. Eyes (Smudged edges)

@@ -21,3 +21,7 @@
 ## 2026-02-04 - Blur Filter vs Radial Gradients
 **Learning:** `ctx.filter = 'blur(...)'` invokes a convolution kernel that scales poorly with resolution and kernel size in high-frequency loops (60fps).
 **Action:** Replace soft circular blurs (like blush) with `ctx.createRadialGradient` and alpha interpolation. It achieves a similar visual result with O(1) fragment shader complexity per pixel.
+
+## 2026-02-12 - Pre-calculation of Canvas Style Strings
+**Learning:** String interpolation for `ctx.fillStyle` or `gradient.addColorStop` (e.g., `rgba(${r}, ${g}, ${b}, ${alpha})`) inside a hot loop creates thousands of temporary strings per second, increasing GC pressure.
+**Action:** Pre-calculate invariant color strings in a `useEffect` hook and store them in a `useRef`. Pass these static strings to the drawing function.
