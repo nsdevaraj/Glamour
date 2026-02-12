@@ -65,3 +65,11 @@ export const DEFAULT_MAKEUP_CONFIG = {
   enableEarrings: false,
   earringsOpacity: 0.8
 };
+export const PRESET_COLORS = [
+  '#C2185B', '#E91E63', '#D81B60', '#AD1457', // Pinks
+  '#9C27B0', '#673AB7', '#4A148C', // Purples
+  '#F44336', '#B71C1C', '#FF5722', // Reds
+  '#795548', '#5D4037', '#3E2723', // Browns
+  '#F5DEB3', '#D2B48C', // Skin tones
+  '#000000', '#FFFFFF'
+];
