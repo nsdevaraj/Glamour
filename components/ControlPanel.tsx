@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { MakeupConfig, MakeupCategory } from '../types';
+import Toggle from './Toggle';
+import ColorSwatches from './ColorSwatches';
 
 interface ControlPanelProps {
   config: MakeupConfig;
@@ -7,15 +9,6 @@ interface ControlPanelProps {
   activeCategory: MakeupCategory;
   setActiveCategory: (cat: MakeupCategory) => void;
 }
-
-const PRESET_COLORS = [
-  '#C2185B', '#E91E63', '#D81B60', '#AD1457', // Pinks
-  '#9C27B0', '#673AB7', '#4A148C', // Purples
-  '#F44336', '#B71C1C', '#FF5722', // Reds
-  '#795548', '#5D4037', '#3E2723', // Browns
-  '#F5DEB3', '#D2B48C', // Skin tones
-  '#000000', '#FFFFFF'
-];
 
 const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   config,
@@ -26,20 +19,7 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   const [isOpen, setIsOpen] = useState(true);
   const categories = Object.values(MakeupCategory);
 
-  const Toggle = ({ label, checked, onChange }: { label: string, checked: boolean, onChange: (v: boolean) => void }) => (
-    <button
-        onClick={() => onChange(!checked)}
-        className={`flex items-center gap-3 px-4 py-2 rounded-full border transition-all duration-300
-            ${checked
-                ? 'bg-pink-500/20 border-pink-500/50 text-white shadow-[0_0_10px_rgba(236,72,153,0.3)]'
-                : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'}`}
-    >
-        <span className={`w-2 h-2 rounded-full ${checked ? 'bg-pink-500' : 'bg-gray-500'}`} />
-        <span className="text-xs font-bold tracking-wider uppercase">{label}</span>
-    </button>
-  );
-
-  const renderColorControl = (label: string, colorKey: keyof MakeupConfig, opacityKey: keyof MakeupConfig) => (
+  const renderColorControl = useCallback((label: string, colorKey: keyof MakeupConfig, opacityKey: keyof MakeupConfig) => (
     <div className="space-y-3">
       <div className="flex justify-between items-center">
          <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{label}</label>
@@ -58,33 +38,14 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
       />
 
       {/* Color Swatches */}
-      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1">
-        <div className="relative group shrink-0">
-            <div 
-                className="w-8 h-8 rounded-full shadow-inner border border-white/20 flex items-center justify-center bg-gradient-to-br from-gray-700 to-black"
-            >
-               <span className="text-white text-xs">+</span>
-            </div>
-            <input
-                type="color"
-                value={config[colorKey] as string}
-                onChange={(e) => updateConfig(colorKey, e.target.value)}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            />
-        </div>
-        {PRESET_COLORS.map(color => (
-            <button
-                key={color}
-                onClick={() => updateConfig(colorKey, color)}
-                className={`w-8 h-8 rounded-full border shrink-0 transition-transform hover:scale-110 ${config[colorKey] === color ? 'border-white scale-110 shadow-lg' : 'border-transparent'}`}
-                style={{ backgroundColor: color }}
-            />
-        ))}
-      </div>
+      <ColorSwatches
+        color={config[colorKey] as string}
+        onColorChange={(color) => updateConfig(colorKey, color)}
+      />
     </div>
-  );
+  ), [config, updateConfig]);
 
-  const renderSliderControl = (label: string, valueKey: keyof MakeupConfig) => (
+  const renderSliderControl = useCallback((label: string, valueKey: keyof MakeupConfig) => (
       <div className="space-y-3">
         <div className="flex justify-between items-center">
            <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{label}</label>
@@ -100,9 +61,9 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
             className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-pink-500 hover:accent-pink-400 transition-all focus:outline-none"
         />
       </div>
-  );
+  ), [config, updateConfig]);
 
-  const renderActiveControls = () => {
+  const renderActiveControls = useCallback(() => {
       switch(activeCategory) {
           case MakeupCategory.LIPS:
               return (
@@ -172,27 +133,10 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                      {config.enableAccessories && (
                          <div className="space-y-3">
                             <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Bindi Color</label>
-                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1">
-                                <div className="relative group shrink-0">
-                                    <div className="w-8 h-8 rounded-full shadow-inner border border-white/20 flex items-center justify-center bg-gradient-to-br from-gray-700 to-black">
-                                        <span className="text-white text-xs">+</span>
-                                    </div>
-                                    <input
-                                        type="color"
-                                        value={config.accessoryColor}
-                                        onChange={(e) => updateConfig('accessoryColor', e.target.value)}
-                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                    />
-                                </div>
-                                {PRESET_COLORS.map(color => (
-                                    <button
-                                        key={color}
-                                        onClick={() => updateConfig('accessoryColor', color)}
-                                        className={`w-8 h-8 rounded-full border shrink-0 transition-transform hover:scale-110 ${config.accessoryColor === color ? 'border-white scale-110 shadow-lg' : 'border-transparent'}`}
-                                        style={{ backgroundColor: color }}
-                                    />
-                                ))}
-                            </div>
+                            <ColorSwatches
+                                color={config.accessoryColor}
+                                onColorChange={(color) => updateConfig('accessoryColor', color)}
+                            />
                          </div>
                      )}
 
@@ -208,7 +152,7 @@ const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
           default:
               return null;
       }
-  }
+  }, [activeCategory, config, renderColorControl, renderSliderControl, updateConfig]);
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none flex flex-col items-center justify-end pb-6 px-4">

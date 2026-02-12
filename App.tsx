@@ -1,18 +1,16 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useReducer } from 'react';
 import MakeoverCanvas from './components/MakeoverCanvas';
 import ControlPanel from './components/ControlPanel';
 import { MakeupConfig, MakeupCategory } from './types';
 import { DEFAULT_MAKEUP_CONFIG } from './constants'
+import { makeupReducer } from './reducer';
 
 const App: React.FC = () => {
-  const [makeupConfig, setMakeupConfig] = useState<MakeupConfig>(DEFAULT_MAKEUP_CONFIG);
+  const [makeupConfig, dispatch] = useReducer(makeupReducer, DEFAULT_MAKEUP_CONFIG);
   const [activeCategory, setActiveCategory] = useState<MakeupCategory>(MakeupCategory.LIPS);
 
   const handleConfigUpdate = useCallback((key: keyof MakeupConfig, value: string | number | boolean) => {
-    setMakeupConfig(prev => ({
-      ...prev,
-      [key]: value
-    }));
+    dispatch({ type: 'UPDATE_CONFIG', key, value });
   }, []);
 
   return (

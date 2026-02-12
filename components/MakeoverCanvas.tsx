@@ -15,7 +15,8 @@ import {
   LANDMARK_EAR_LEFT,
   LANDMARK_EAR_RIGHT
 } from '../constants';
-import { NOSE_RING_B64, EARRING_B64 } from './assets';
+import noseRingUrl from '../src/assets/nose_ring.png';
+import earringUrl from '../src/assets/earring.png';
 import { FaceMesh } from '@mediapipe/face_mesh';
 import { Camera } from '@mediapipe/camera_utils';
 
@@ -497,11 +498,11 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = React.memo(({ config }) =>
 
       // Load assets
       const img1 = new Image();
-      img1.src = 'data:image/png;base64,' + NOSE_RING_B64;
+      img1.src = noseRingUrl;
       noseRingImg.current = img1;
 
       const img2 = new Image();
-      img2.src = 'data:image/png;base64,' + EARRING_B64;
+      img2.src = earringUrl;
       earringImg.current = img2;
 
       return () => {
@@ -613,6 +614,9 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = React.memo(({ config }) =>
         if (!isMountedRef.current) return;
 
         try {
+            // Lazy load models only after camera permission is granted
+            await navigator.mediaDevices.getUserMedia({ video: true });
+
             faceMesh = new FaceMesh({locateFile: (file: string) => {
                 return `/models/face_mesh/${file}`;
             }});
@@ -642,7 +646,7 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = React.memo(({ config }) =>
             }
         } catch (err) {
             console.error(err);
-            setCameraError("Failed to initialize camera or models.");
+            setCameraError("Failed to initialize camera or models. Please ensure camera access is allowed.");
         }
     };
     
