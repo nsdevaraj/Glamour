@@ -25,3 +25,7 @@
 ## 2026-02-12 - Pre-calculation of Canvas Style Strings
 **Learning:** String interpolation for `ctx.fillStyle` or `gradient.addColorStop` (e.g., `rgba(${r}, ${g}, ${b}, ${alpha})`) inside a hot loop creates thousands of temporary strings per second, increasing GC pressure.
 **Action:** Pre-calculate invariant color strings in a `useEffect` hook and store them in a `useRef`. Pass these static strings to the drawing function.
+
+## 2026-02-13 - Caching Unit Gradients for Variable Sizes
+**Learning:** Instead of creating a new `CanvasGradient` every frame for dynamic shapes (like blush on moving cheeks), create a cached "unit gradient" (radius=1) and use `ctx.scale(radius, radius)` to apply it. This avoids object allocation and string parsing in the render loop.
+**Action:** When implementing scalable gradient effects, bake the color stops into a unit gradient and handle sizing via context transformation.
