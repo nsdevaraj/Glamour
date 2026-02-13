@@ -276,15 +276,15 @@ const drawStrokes = (
 };
 
 // Optimization: Avoid allocation of 'pts' array and sorting. Use gradients instead of expensive blur.
+// Bolt Optimization: Use pre-cached unit gradients and scaling to avoid gradient creation in loop.
 const drawBlushes = (
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
   landmarks: any[],
   shapesIndices: number[][],
-  colorPass1: string,
-  colorPass2: string,
-  transparentColor: string
+  gradientPass1: CanvasGradient,
+  gradientPass2: CanvasGradient
 ) => {
   ctx.save();
   ctx.globalCompositeOperation = 'multiply';
@@ -346,13 +346,12 @@ const drawBlushes = (
 
           ctx.save();
           ctx.scale(1, scaleY);
-          const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
-          gradient.addColorStop(0, colorPass1);
-          gradient.addColorStop(1, transparentColor);
+          // Scale user space so that radius becomes 1 unit
+          ctx.scale(radius, radius);
 
-          ctx.fillStyle = gradient;
+          ctx.fillStyle = gradientPass1;
           ctx.beginPath();
-          ctx.arc(0, 0, radius, 0, 2 * Math.PI);
+          ctx.arc(0, 0, 1, 0, 2 * Math.PI);
           ctx.fill();
           ctx.restore();
       }
@@ -367,13 +366,12 @@ const drawBlushes = (
 
           ctx.save();
           ctx.scale(1, scaleY);
-          const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
-          gradient.addColorStop(0, colorPass2);
-          gradient.addColorStop(1, transparentColor);
+          // Scale user space so that radius becomes 1 unit
+          ctx.scale(radius, radius);
 
-          ctx.fillStyle = gradient;
+          ctx.fillStyle = gradientPass2;
           ctx.beginPath();
-          ctx.arc(0, 0, radius, 0, 2 * Math.PI);
+          ctx.arc(0, 0, 1, 0, 2 * Math.PI);
           ctx.fill();
           ctx.restore();
       }
@@ -492,21 +490,37 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = React.memo(({ config }) =>
   const isCompareModeRef = useRef(isCompareMode);
   const isMountedRef = useRef(true);
 
-  // Optimization: Store pre-computed blush colors to avoid string concatenation in render loop
-  const blushColorStopsRef = useRef({ pass1: '', pass2: '', transparent: '' });
+  // Optimization: Store pre-computed blush gradients to avoid creation in render loop
+  const blushGradientsRef = useRef<{ pass1: CanvasGradient | null, pass2: CanvasGradient | null }>({ pass1: null, pass2: null });
 
+  // Update invariant refs
   useEffect(() => {
     configRef.current = config;
     sliderPosRef.current = sliderPos;
     isCompareModeRef.current = isCompareMode;
+  }, [config, sliderPos, isCompareMode]);
+
+  // Update blush gradients when color/opacity changes
+  useEffect(() => {
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
 
     const rgb = hexToRgb(config.blushColor);
-    blushColorStopsRef.current = {
-      pass1: `rgba(${rgb}, ${config.blushOpacity * 0.4})`,
-      pass2: `rgba(${rgb}, ${config.blushOpacity * 0.6})`,
-      transparent: `rgba(${rgb}, 0)`
-    };
-  }, [config, sliderPos, isCompareMode]);
+    const transparent = `rgba(${rgb}, 0)`;
+    const color1 = `rgba(${rgb}, ${config.blushOpacity * 0.4})`;
+    const color2 = `rgba(${rgb}, ${config.blushOpacity * 0.6})`;
+
+    // Create unit gradients (radius = 1)
+    const g1 = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    g1.addColorStop(0, color1);
+    g1.addColorStop(1, transparent);
+
+    const g2 = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    g2.addColorStop(0, color2);
+    g2.addColorStop(1, transparent);
+
+    blushGradientsRef.current = { pass1: g1, pass2: g2 };
+  }, [config.blushColor, config.blushOpacity]);
 
   useEffect(() => {
       isMountedRef.current = true;
@@ -586,8 +600,10 @@ const MakeoverCanvas: React.FC<MakeoverCanvasProps> = React.memo(({ config }) =>
             drawShapes(ctx, w, h, landmarks, [FACEMESH_FACE_OVAL], currentConfig.foundationTone, currentConfig.foundationOpacity, 30, 'multiply');
             
             if (currentConfig.blushOpacity > 0.01) {
-                const { pass1, pass2, transparent } = blushColorStopsRef.current;
-                drawBlushes(ctx, w, h, landmarks, [FACEMESH_LEFT_CHEEK, FACEMESH_RIGHT_CHEEK], pass1, pass2, transparent);
+                const { pass1, pass2 } = blushGradientsRef.current;
+                if (pass1 && pass2) {
+                   drawBlushes(ctx, w, h, landmarks, [FACEMESH_LEFT_CHEEK, FACEMESH_RIGHT_CHEEK], pass1, pass2);
+                }
             }
         }
 
